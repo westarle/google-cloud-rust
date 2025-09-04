@@ -116,7 +116,7 @@ impl Client {
         let retry_policy = self.get_retry_policy(&options);
         let backoff_policy = self.get_backoff_policy(&options);
         let this = self.clone();
-        let inner = async move |remaining_time: Option<Duration>| {
+        let inner = async move |remaining_time: Option<Duration>, attempt_count: u32| {
             this.clone()
                 .request_attempt::<Request, Response>(
                     extensions.clone(),
@@ -125,6 +125,7 @@ impl Client {
                     &options,
                     remaining_time,
                     headers.clone(),
+                    attempt_count
                 )
                 .await
         };
@@ -149,6 +150,7 @@ impl Client {
         options: &gax::options::RequestOptions,
         remaining_time: Option<std::time::Duration>,
         headers: HeaderMap,
+        _attempt_count: u32
     ) -> Result<tonic::Response<Response>>
     where
         Request: prost::Message + 'static,

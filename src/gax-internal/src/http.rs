@@ -42,6 +42,7 @@ pub struct ReqwestClient {
 }
 
 impl ReqwestClient {
+
     pub async fn new(
         config: crate::options::ClientConfig,
         default_endpoint: &str,
@@ -127,11 +128,11 @@ impl ReqwestClient {
         let retry = self.get_retry_policy(&options);
         let backoff = self.get_backoff_policy(&options);
         let this = self.clone();
-        let inner = async move |d| {
+        let inner = async move |d, c| {
             let builder = builder
                 .try_clone()
                 .expect("client libraries only create builders where `try_clone()` succeeds");
-            this.request_attempt(builder, &options, d).await
+            this.request_attempt(builder, &options, d, c).await
         };
         let sleep = async |d| tokio::time::sleep(d).await;
         gax::retry_loop_internal::retry_loop(inner, sleep, idempotent, throttler, retry, backoff)
@@ -143,6 +144,7 @@ impl ReqwestClient {
         mut builder: reqwest::RequestBuilder,
         options: &gax::options::RequestOptions,
         remaining_time: Option<std::time::Duration>,
+        _attempt_count: u32 // TODO: hook up to a trace span.
     ) -> Result<Response<O>> {
         builder = gax::retry_loop_internal::effective_timeout(options, remaining_time)
             .into_iter()

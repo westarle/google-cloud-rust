@@ -57,7 +57,7 @@ pub async fn retry_loop<F, S, Response>(
     backoff_policy: Arc<dyn BackoffPolicy>,
 ) -> Result<Response>
 where
-    F: AsyncFnMut(Option<Duration>) -> Result<Response> + Send,
+    F: AsyncFnMut(Option<Duration>, u32) -> Result<Response> + Send,
     S: AsyncFn(Duration) -> () + Send,
 {
     let loop_start = tokio::time::Instant::now().into_std();
@@ -94,7 +94,7 @@ where
         }
         attempt_count += 1;
         let state = state.set_attempt_count(attempt_count);
-        match inner(remaining_time).await {
+        match inner(remaining_time, attempt_count).await {
             Ok(r) => {
                 retry_throttler
                     .lock()
@@ -174,8 +174,8 @@ mod tests {
         // This test simulates a server immediate returning a successful
         // response.
         let mut call = MockCall::new();
-        call.expect_call().once().returning(|_| success());
-        let inner = async move |d| call.call(d);
+        call.expect_call().once().returning(|_, _| success());
+        let inner = async move |d, s| call.call(d, s);
 
         let mut throttler = MockRetryThrottler::new();
         throttler.expect_on_success().once().return_const(());
@@ -206,8 +206,8 @@ mod tests {
         // This test simulates a server responding with an immediate and
         // permanent error.
         let mut call = MockCall::new();
-        call.expect_call().once().returning(|_| permanent());
-        let inner = async move |d| call.call(d);
+        call.expect_call().once().returning(|_, _| permanent());
+        let inner = async move |d, c| call.call(d, c);
 
         let mut throttler = MockRetryThrottler::new();
         throttler.expect_on_retry_failure().once().return_const(());
@@ -252,19 +252,19 @@ mod tests {
         call.expect_call()
             .once()
             .in_sequence(&mut call_seq)
-            .withf(|got| got == &Some(Duration::from_secs(3)))
-            .returning(|_| transient());
+            .withf(|got, _| got == &Some(Duration::from_secs(3)))
+            .returning(|_, _| transient());
         call.expect_call()
             .once()
             .in_sequence(&mut call_seq)
-            .withf(|got| got == &Some(Duration::from_secs(2)))
-            .returning(|_| transient());
+            .withf(|got, _| got == &Some(Duration::from_secs(2)))
+            .returning(|_, _| transient());
         call.expect_call()
             .once()
             .in_sequence(&mut call_seq)
-            .withf(|got| got == &Some(Duration::from_secs(1)))
-            .returning(|_| success());
-        let inner = async move |d| call.call(d);
+            .withf(|got, _| got == &Some(Duration::from_secs(1)))
+            .returning(|_, _| success());
+        let inner = async move |d, c| call.call(d, c);
 
         let mut throttler_seq = mockall::Sequence::new();
         let mut throttler = MockRetryThrottler::new();
@@ -362,11 +362,11 @@ mod tests {
         for i in 0..ERRORS {
             call.expect_call()
                 .once()
-                .withf(|d| d.is_none())
+                .withf(|d, _| d.is_none())
                 .in_sequence(&mut call_seq)
-                .returning(move |_| numbered_transient(i));
+                .returning(move |_, _| numbered_transient(i));
         }
-        let inner = async move |d| call.call(d);
+        let inner = async move |d, c| call.call(d, c);
 
         let mut throttler_seq = mockall::Sequence::new();
         let mut throttler = MockRetryThrottler::new();
@@ -446,12 +446,12 @@ mod tests {
         call.expect_call()
             .once()
             .in_sequence(&mut call_seq)
-            .returning(|_| transient());
+            .returning(|_, _| transient());
         call.expect_call()
             .once()
             .in_sequence(&mut call_seq)
-            .returning(|_| permanent());
-        let inner = async move |d| call.call(d);
+            .returning(|_, _| permanent());
+        let inner = async move |d, c| call.call(d, c);
 
         let mut throttler_seq = mockall::Sequence::new();
         let mut throttler = MockRetryThrottler::new();
@@ -522,12 +522,12 @@ mod tests {
         call.expect_call()
             .once()
             .in_sequence(&mut call_seq)
-            .returning(|_| transient());
+            .returning(|_, _| transient());
         call.expect_call()
             .once()
             .in_sequence(&mut call_seq)
-            .returning(|_| success());
-        let inner = async move |d| call.call(d);
+            .returning(|_, _| success());
+        let inner = async move |d, c| call.call(d, c);
 
         let mut throttler_seq = mockall::Sequence::new();
         let mut throttler = MockRetryThrottler::new();
@@ -602,8 +602,8 @@ mod tests {
         // the retry attempt is throttled, and then the retry loop stops the
         // loop.
         let mut call = MockCall::new();
-        call.expect_call().once().returning(|_| transient());
-        let inner = async move |d| call.call(d);
+        call.expect_call().once().returning(|_, _| transient());
+        let inner = async move |d, c| call.call(d, c);
 
         let mut throttler_seq = mockall::Sequence::new();
         let mut throttler = MockRetryThrottler::new();
@@ -689,7 +689,7 @@ mod tests {
         call.expect_call()
             .once()
             .in_sequence(&mut seq)
-            .returning(|_| transient());
+            .returning(|_, _| transient());
 
         // The retry policy says we should retry this error.
         retry_policy
@@ -723,7 +723,7 @@ mod tests {
         // There is not enough time left to sleep, and make another attempt, so
         // the retry loop is terminated.
 
-        let inner = async move |d| call.call(d);
+        let inner = async move |d, c| call.call(d, c);
         let backoff = async move |d| sleep.sleep(d).await;
         let response = retry_loop(
             inner,
@@ -771,7 +771,7 @@ mod tests {
         call.expect_call()
             .once()
             .in_sequence(&mut seq)
-            .returning(|_| transient());
+            .returning(|_, _| transient());
 
         // The retry policy says we should retry this error.
         retry_policy
@@ -843,7 +843,7 @@ mod tests {
         // There is not enough time left to sleep, and make another attempt, so
         // the retry loop is terminated.
 
-        let inner = async move |d| call.call(d);
+        let inner = async move |d, c| call.call(d, c);
         let backoff = async move |d| sleep.sleep(d).await;
         let response = retry_loop(
             inner,
@@ -905,13 +905,13 @@ mod tests {
     }
 
     trait Call {
-        fn call(&self, d: Option<Duration>) -> Result<String>;
+        fn call(&self, d: Option<Duration>, c: u32) -> Result<String>;
     }
 
     mockall::mock! {
         Call {}
         impl Call for Call {
-            fn call(&self, d: Option<Duration>) -> Result<String>;
+            fn call(&self, d: Option<Duration>, c: u32) -> Result<String>;
         }
     }
 
