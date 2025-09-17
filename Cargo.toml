@@ -256,6 +256,7 @@ members = [
   "src/generated/type",
   "src/integration-tests",
   "src/lro",
+  "src/observability-macros",
   "src/protojson-conformance",
   "src/pubsub",
   "src/root",
