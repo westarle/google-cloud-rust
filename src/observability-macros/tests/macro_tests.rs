@@ -1,7 +1,6 @@
 use google_cloud_observability_macros::ObservabilityAttributes;
 use tracing::subscriber::with_default;
 use tracing_mock::{expect, subscriber};
-use tracing::field;
 
 // --- Test Cases ---
 

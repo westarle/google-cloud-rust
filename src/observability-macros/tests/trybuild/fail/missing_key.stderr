@@ -1,7 +1,5 @@
-error: proc-macro derive panicked
- --> tests/trybuild/fail/missing_key.rs:4:24
+error: Missing 'key' argument in #[observability] attribute
+ --> tests/trybuild/fail/missing_key.rs:7:5
   |
-4 | #[derive(Debug, Clone, ObservabilityAttributes)]
-  |                        ^^^^^^^^^^^^^^^^^^^^^^^
-  |
-  = help: message: Missing 'key' argument in #[observability] attribute on field: otel_status
+7 |     otel_status: String,
+  |     ^^^^^^^^^^^
