@@ -1,0 +1,7 @@
+error: proc-macro derive panicked
+ --> tests/trybuild/fail/unsupported_type.rs:3:24
+  |
+3 | #[derive(Debug, Clone, ObservabilityAttributes)]
+  |                        ^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: message: Unsupported field type for observability key on field: test_unsupported. Only String, i64, Option<String>, and Option<i64> are supported.

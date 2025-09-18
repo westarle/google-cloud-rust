@@ -1,6 +1,7 @@
 use google_cloud_observability_macros::ObservabilityAttributes;
 use tracing::subscriber::with_default;
 use tracing_mock::{expect, subscriber};
+use tracing::field;
 
 // --- Test Cases ---
 
@@ -23,7 +24,7 @@ fn test_create_span_name() {
 
     with_default(subscriber, || {
         let info = TestInfo { s: "hello".to_string(), i: 123 };
-        let span = info.create_span();
+        let _span = info.create_span();
     });
 
     handle.assert_finished();
@@ -45,7 +46,7 @@ fn test_create_span_default_name() {
 
     with_default(subscriber, || {
         let info = DefaultNameInfo { f: "world".to_string() };
-        let span = info.create_span();
+        let _span = info.create_span();
     });
 
     handle.assert_finished();
@@ -62,11 +63,14 @@ pub(crate) struct BasicSpanInfo {
 
 #[test]
 fn test_basic_struct_attributes() {
-    let span = expect::span().named("BasicSpanInfo");
+    let span = expect::span().named("BasicSpanInfo")
+        .with_fields(
+            expect::field("test.string").with_value(&"basic")
+            .and(expect::field("test.i64").with_value(&42i64))
+            .only()
+        );
     let (subscriber, handle) = subscriber::mock()
-        .new_span(span.clone())
-        .enter(span.clone())
-        .exit(span.clone())
+        .new_span(span)
         .only()
         .run_with_handle();
 
@@ -75,17 +79,53 @@ fn test_basic_struct_attributes() {
             test_string: "basic".to_string(),
             test_i64: 42,
         };
-        let span = info.create_span();
-        let _enter = span.enter();
+        let _span = info.create_span();
     });
 
     handle.assert_finished();
-    // TODO: Add attribute expectations to the mock builder
+}
+
+#[derive(Debug, Clone, ObservabilityAttributes)]
+pub(crate) struct InitialOptionsSpanInfo {
+    #[observability(key = "opt.string.some")]
+    opt_string_some: Option<String>,
+    #[observability(key = "opt.string.none")]
+    opt_string_none: Option<String>,
+    #[observability(key = "opt.i64.some")]
+    opt_i64_some: Option<i64>,
+    #[observability(key = "opt.i64.none")]
+    opt_i64_none: Option<i64>,
+}
+
+#[test]
+fn test_initial_options_attributes() {
+    let span = expect::span().named("InitialOptionsSpanInfo")
+        .with_fields(
+            expect::field("opt.string.some").with_value(&"hello")
+            .and(expect::field("opt.i64.some").with_value(&100i64))
+            .only()
+        );
+    let (subscriber, handle) = subscriber::mock()
+        .new_span(span)
+        .only()
+        .run_with_handle();
+
+    with_default(subscriber, || {
+        let info = InitialOptionsSpanInfo {
+            opt_string_some: Some("hello".to_string()),
+            opt_string_none: None,
+            opt_i64_some: Some(100),
+            opt_i64_none: None,
+        };
+        let _span = info.create_span();
+    });
+
+    handle.assert_finished();
 }
 
 // Corresponds to tests/trybuild/success/options.rs
 #[derive(Debug, Clone, ObservabilityAttributes)]
-pub(crate) struct OptionsSpanInfo {
+pub(crate) struct ResponseOptionsSpanInfo {
     #[observability(key = "test.string.req")]
     test_string_req: String,
     #[observability(key = "test.string.opt", phase = "response")]
@@ -95,27 +135,26 @@ pub(crate) struct OptionsSpanInfo {
 }
 
 #[test]
-fn test_options_struct_attributes() {
-    let span = expect::span().named("OptionsSpanInfo");
+fn test_response_options_struct_attributes() {
+    let span = expect::span().named("ResponseOptionsSpanInfo")
+        .with_fields(
+            expect::field("test.string.req").with_value(&"required")
+            .and(expect::field("test.string.opt").with_value(&"optional"))
+            .only()
+        );
     let (subscriber, handle) = subscriber::mock()
-        .new_span(span.clone())
-        .enter(span.clone())
-        .exit(span.clone())
+        .new_span(span)
         .only()
         .run_with_handle();
 
     with_default(subscriber, || {
-        let info = OptionsSpanInfo {
+        let info = ResponseOptionsSpanInfo {
             test_string_req: "required".to_string(),
             test_string_opt: Some("optional".to_string()),
             test_i64_opt: None,
         };
-        let span = info.create_span();
-        span.in_scope(|| {
-            // TODO: Call record_response_attributes once macro generates it
-        });
+        let _span = info.create_span();
     });
 
     handle.assert_finished();
-    // TODO: Add attribute expectations to the mock builder
 }
