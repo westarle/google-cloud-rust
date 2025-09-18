@@ -19,4 +19,4 @@ syn = { version = "2.0", features = ["full"] }
 trybuild = "1.0"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["json"] }
-tracing-test = { version = "0.2", features = ["spans"] }
+tracing-mock = "0.1.0-beta.1"
