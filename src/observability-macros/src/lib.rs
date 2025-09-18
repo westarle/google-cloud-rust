@@ -73,6 +73,7 @@ fn derive_observability_attributes_impl(input: &DeriveInput) -> syn::Result<Toke
 
     let key_consts = generate_key_consts(&field_infos);
     let create_span_attrs = generate_create_span_attrs(struct_name, &field_infos);
+    let record_response_attrs = generate_record_response_attrs(struct_name, &field_infos);
 
     let expanded = quote! {
         impl #struct_name {
@@ -85,8 +86,8 @@ fn derive_observability_attributes_impl(input: &DeriveInput) -> syn::Result<Toke
                 )
             }
 
-            pub fn record_response_attributes(&self, _record: &mut ::tracing::span::Record<'_>) {
-                // Placeholder
+            pub fn record_response_attributes(&self, span: &::tracing::Span) {
+                #(#record_response_attrs)*
             }
         }
     };
@@ -192,7 +193,9 @@ fn generate_key_consts(field_infos: &[FieldInfo]) -> Vec<proc_macro2::TokenStrea
 }
 
 fn generate_create_span_attrs(struct_name: &Ident, field_infos: &[FieldInfo]) -> Vec<proc_macro2::TokenStream> {
-    field_infos.iter().map(|info| {
+    field_infos.iter()
+        .filter(|info| !info.is_response_phase)
+        .map(|info| {
         let field_name = info.field_name;
         let field_type = info.field_type;
         let const_ident = &info.const_ident;
@@ -222,6 +225,45 @@ fn generate_create_span_attrs(struct_name: &Ident, field_infos: &[FieldInfo]) ->
             unreachable!()
         }
     }).collect()
+}
+
+fn generate_record_response_attrs(struct_name: &Ident, field_infos: &[FieldInfo]) -> Vec<proc_macro2::TokenStream> {
+    field_infos.iter()
+        .filter(|info| info.is_response_phase)
+        .map(|info| {
+            let field_name = info.field_name;
+            let field_type = info.field_type;
+            let const_ident = &info.const_ident;
+
+            if is_option_type(field_type) {
+                let inner_ty = get_option_inner_type(field_type).unwrap();
+                if is_string_type(inner_ty) {
+                    quote! {
+                        if let Some(val) = &self.#field_name {
+                            span.record(#struct_name::#const_ident, val.as_str());
+                        }
+                    }
+                } else if is_i64_type(inner_ty) {
+                    quote! {
+                        if let Some(val) = self.#field_name {
+                            span.record(#struct_name::#const_ident, val);
+                        }
+                    }
+                } else {
+                    unreachable!()
+                }
+            } else if is_string_type(field_type) {
+                 quote! {
+                    span.record(#struct_name::#const_ident, self.#field_name.as_str());
+                }
+            } else if is_i64_type(field_type) {
+                 quote! {
+                    span.record(#struct_name::#const_ident, self.#field_name);
+                }
+            } else {
+                unreachable!()
+            }
+        }).collect()
 }
 
 fn is_string_type(ty: &Type) -> bool {

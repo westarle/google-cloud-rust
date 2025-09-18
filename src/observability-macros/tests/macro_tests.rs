@@ -138,7 +138,7 @@ fn test_response_options_struct_attributes() {
     let span = expect::span().named("ResponseOptionsSpanInfo")
         .with_fields(
             expect::field("test.string.req").with_value(&"required")
-            .and(expect::field("test.string.opt").with_value(&"optional"))
+            // Response phase fields should not be present here
             .only()
         );
     let (subscriber, handle) = subscriber::mock()
@@ -150,9 +150,10 @@ fn test_response_options_struct_attributes() {
         let info = ResponseOptionsSpanInfo {
             test_string_req: "required".to_string(),
             test_string_opt: Some("optional".to_string()),
-            test_i64_opt: None,
+            test_i64_opt: Some(200),
         };
         let _span = info.create_span();
+        // TODO(#3239): Add test for record_response_attributes, may require custom visitor or different test strategy
     });
 
     handle.assert_finished();
