@@ -14,162 +14,211 @@
 
 #![allow(dead_code)] // TODO(#3239): Remove once used in http.rs
 
-use crate::options::InstrumentationClientInfo;
-use gax::options::RequestOptions;
+use sync_keys_fields_macro::ensure_keys_and_fields_in_sync;
 
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) enum OtelStatus {
-    Unset,
-    Ok,
-    Error,
-}
+#[ensure_keys_and_fields_in_sync(struct_name = "HttpSpanInfo")]
+pub mod http {
+    use crate::options::InstrumentationClientInfo;
+    use gax::options::RequestOptions;
 
-impl OtelStatus {
-    pub(crate) fn as_str(&self) -> &'static str {
-        match self {
-            OtelStatus::Unset => "Unset",
-            OtelStatus::Ok => "Ok",
-            OtelStatus::Error => "Error",
-        }
-    }
-}
+    // OpenTelemetry Semantic Convention Keys
+    // See https://opentelemetry.io/docs/specs/semconv/http/http-spans/
 
-/// Populate attributes of tracing spans for HTTP requests.
-///
-/// OpenTelemetry recommends a number of semantic conventions for
-/// tracing HTTP requests. This type holds the information extracted
-/// from HTTP requests and responses, formatted to align with these
-/// OpenTelemetry semantic conventions.
-/// See [OpenTelemetry Semantic Conventions for HTTP](https://opentelemetry.io/docs/specs/semconv/http/http-spans/).
-#[derive(Debug, Clone)]
-pub(crate) struct HttpSpanInfo {
-    // Attributes for OpenTelemetry SDK interop
-    /// Span Kind. Always CLIENT for a span representing an outbound HTTP request.
-    otel_kind: String,
-    /// Span Name. Recommended to be "{http.request.method} {url.template}" if url.template is available, otherwise "{http.request.method}".
-    otel_name: String,
-    /// Span Status. Set to Error in the event of an unrecoverable error, for example network error, 5xx status codes. Unset otherwise (including 4xx codes for CLIENT spans).
-    otel_status: OtelStatus,
+    /// Span Kind for OpenTelemetry interop. Always CLIENT for a span representing an outbound HTTP request.
+    pub(crate) const KEY_OTEL_KIND: &str = "otel.kind";
+    /// Span Name for OpenTelemetry interop. Recommended to be "{http.request.method} {url.template}" if url.template is available, otherwise "{http.request.method}".
+    pub(crate) const KEY_OTEL_NAME: &str = "otel.name";
+    /// Span Status for OpenTelemetry interop. Set to Error in the event of an unrecoverable error, for example network error, 5xx status codes. Unset otherwise (including 4xx codes for CLIENT spans).
+    pub(crate) const KEY_OTEL_STATUS: &str = "otel.status";
 
-    // OpenTelemetry Semantic Conventions
     /// Which RPC system is being used. Set to "http" for REST calls.
-    rpc_system: String,
+    pub(crate) const KEY_RPC_SYSTEM: &str = "rpc.system";
     /// The HTTP request method, for example GET; POST; HEAD.
-    http_request_method: String,
+    pub(crate) const KEY_HTTP_REQUEST_METHOD: &str = "http.request.method";
     /// The actual destination host name or IP address. May differ from the URL's host if overridden, for example myservice.googleapis.com; myservice-staging.sandbox.googleapis.com; 10.0.0.1.
-    server_address: String,
+    pub(crate) const KEY_SERVER_ADDRESS: &str = "server.address";
     /// The actual destination port number. May differ from the URL's port if overridden, for example 443; 8080.
-    server_port: i64,
+    pub(crate) const KEY_SERVER_PORT: &str = "server.port";
     /// The absolute URL of the request, for example https://www.foo.bar/search?q=OpenTelemetry.
-    url_full: String,
+    pub(crate) const KEY_URL_FULL: &str = "url.full";
     /// The URI scheme component identifying the used protocol, for example http; https.
-    url_scheme: Option<String>,
+    pub(crate) const KEY_URL_SCHEME: &str = "url.scheme";
     /// The low-cardinality template of the absolute path, for example /v2/locations/{location}/projects/{project}/.
-    url_template: Option<String>,
+    pub(crate) const KEY_URL_TEMPLATE: &str = "url.template";
     /// The nominal domain from the original URL, representing the intended service, for example myservice.googleapis.com.
-    url_domain: Option<String>,
+    pub(crate) const KEY_URL_DOMAIN: &str = "url.domain";
 
     /// The numeric HTTP response status code, for example 200; 404; 500.
-    http_response_status_code: Option<i64>,
+    pub(crate) const KEY_HTTP_RESPONSE_STATUS_CODE: &str = "http.response.status_code";
     /// A low cardinality a class of error the operation ended with.
-    /// For HTTP status codes >= 400, this is the status code as a string.
-    /// For network errors, a short identifier like TIMEOUT, CONNECTION_ERROR.
-    error_type: Option<String>,
+    pub(crate) const KEY_ERROR_TYPE: &str = "error.type";
     /// The ordinal number of times this request has been resent (e.g., due to retries or redirects). None for the first attempt.
-    http_request_resend_count: Option<i64>,
+    pub(crate) const KEY_HTTP_REQUEST_RESEND_COUNT: &str = "http.request.resend_count";
 
     // Custom GCP Attributes
     /// Identifies the Google Cloud service, for example appengine; run; firestore.
-    gcp_client_service: Option<String>,
+    pub(crate) const KEY_GCP_CLIENT_SERVICE: &str = "gcp.client.service";
     /// The version of the client library, for example v1.0.2.
-    gcp_client_version: Option<String>,
+    pub(crate) const KEY_GCP_CLIENT_VERSION: &str = "gcp.client.version";
     /// The repository of the client library. Always "googleapis/google-cloud-rust".
-    gcp_client_repo: String,
+    pub(crate) const KEY_GCP_CLIENT_REPO: &str = "gcp.client.repo";
     /// The crate name of the client library, for example google-cloud-storage.
-    gcp_client_artifact: Option<String>,
-}
+    pub(crate) const KEY_GCP_CLIENT_ARTIFACT: &str = "gcp.client.artifact";
 
-impl HttpSpanInfo {
-    pub(crate) fn from_request(
-        request: &reqwest::Request,
-        options: &RequestOptions,
-        instrumentation: Option<&InstrumentationClientInfo>,
-        prior_attempt_count: u32,
-    ) -> Self {
-        let url = request.url();
-        let method = request.method();
+    #[derive(Debug, Clone, PartialEq)]
+    pub(crate) enum OtelStatus {
+        Unset,
+        Ok,
+        Error,
+    }
 
-        let url_template = gax::options::internal::get_path_template(options);
-        let otel_name = url_template.map_or_else(
-            || method.to_string(),
-            |template| format!("{} {}", method, template),
-        );
-
-        let http_request_resend_count = if prior_attempt_count > 0 {
-            Some(prior_attempt_count as i64)
-        } else {
-            None
-        };
-
-        let (gcp_client_service, gcp_client_version, gcp_client_artifact, url_domain) =
-            instrumentation.map_or((None, None, None, None), |info| {
-                (
-                    Some(info.service_name.to_string()),
-                    Some(info.client_version.to_string()),
-                    Some(info.client_artifact.to_string()),
-                    Some(info.default_host.to_string()),
-                )
-            });
-
-        Self {
-            rpc_system: "http".to_string(),
-            otel_kind: "Client".to_string(),
-            otel_name,
-            otel_status: OtelStatus::Unset,
-            http_request_method: method.to_string(),
-            server_address: url.host_str().map(String::from).unwrap_or_default(),
-            server_port: url.port_or_known_default().map(|p| p as i64).unwrap_or(0),
-            url_full: url.to_string(),
-            url_scheme: Some(url.scheme().to_string()),
-            url_template: url_template.map(String::from),
-            url_domain,
-            http_response_status_code: None,
-            error_type: None,
-            http_request_resend_count,
-            gcp_client_service,
-            gcp_client_version,
-            gcp_client_repo: "googleapis/google-cloud-rust".to_string(),
-            gcp_client_artifact,
+    impl OtelStatus {
+        pub(crate) fn as_str(&self) -> &'static str {
+            match self {
+                OtelStatus::Unset => "Unset",
+                OtelStatus::Ok => "Ok",
+                OtelStatus::Error => "Error",
+            }
         }
     }
 
-    /// Updates the span info based on the outcome of the HTTP request.
+    /// Populate attributes of tracing spans for HTTP requests.
     ///
-    /// This method should be called after the request has completed, it will fill in any parts of
-    /// the span that depend on the result of the request.
-    pub(crate) fn update_from_response(
-        &mut self,
-        result: &Result<reqwest::Response, reqwest::Error>,
-    ) {
-        match result {
-            Ok(response) => {
-                self.http_response_status_code = Some(response.status().as_u16() as i64);
-                if response.status().is_success() {
-                    self.otel_status = OtelStatus::Ok;
-                } else {
-                    self.otel_status = OtelStatus::Error;
-                    self.error_type = Some(response.status().to_string());
-                }
+    /// OpenTelemetry recommends a number of semantic conventions for
+    /// tracing HTTP requests. This type holds the information extracted
+    /// from HTTP requests and responses, formatted to align with these
+    /// OpenTelemetry semantic conventions.
+    /// See [OpenTelemetry Semantic Conventions for HTTP](https://opentelemetry.io/docs/specs/semconv/http/http-spans/).
+    #[derive(Debug, Clone)]
+    pub(crate) struct HttpSpanInfo {
+        // Attributes for OpenTelemetry SDK interop
+        /// Span Kind for OpenTelemetry interop. Always CLIENT for a span representing an outbound HTTP request.
+        otel_kind: String,
+        /// Span Name for OpenTelemetry interop. Recommended to be "{http.request.method} {url.template}" if url.template is available, otherwise "{http.request.method}".
+        otel_name: String,
+        /// Span Status for OpenTelemetry interop. Set to Error in the event of an unrecoverable error, for example network error, 5xx status codes. Unset otherwise (including 4xx codes for CLIENT spans).
+        otel_status: OtelStatus,
+
+        // OpenTelemetry Semantic Conventions
+        /// Which RPC system is being used. Set to "http" for REST calls.
+        rpc_system: String,
+        /// The HTTP request method, for example GET; POST; HEAD.
+        http_request_method: String,
+        /// The actual destination host name or IP address. May differ from the URL's host if overridden, for example myservice.googleapis.com; myservice-staging.sandbox.googleapis.com; 10.0.0.1.
+        server_address: String,
+        /// The actual destination port number. May differ from the URL's port if overridden, for example 443; 8080.
+        server_port: i64,
+        /// The absolute URL of the request, for example https://www.foo.bar/search?q=OpenTelemetry.
+        url_full: String,
+        /// The URI scheme component identifying the used protocol, for example http; https.
+        url_scheme: Option<String>,
+        /// The low-cardinality template of the absolute path, for example /v2/locations/{location}/projects/{project}/.
+        url_template: Option<String>,
+        /// The nominal domain from the original URL, representing the intended service, for example myservice.googleapis.com.
+        url_domain: Option<String>,
+
+        /// The numeric HTTP response status code, for example 200; 404; 500.
+        http_response_status_code: Option<i64>,
+        /// A low cardinality a class of error the operation ended with.
+        /// For HTTP status codes >= 400, this is the status code as a string.
+        /// For network errors, a short identifier like TIMEOUT, CONNECTION_ERROR.
+        error_type: Option<String>,
+        /// The ordinal number of times this request has been resent (e.g., due to retries or redirects). None for the first attempt.
+        http_request_resend_count: Option<i64>,
+
+        // Custom GCP Attributes
+        /// Identifies the Google Cloud service, for example appengine; run; firestore.
+        gcp_client_service: Option<String>,
+        /// The version of the client library, for example v1.0.2.
+        gcp_client_version: Option<String>,
+        /// The repository of the client library. Always "googleapis/google-cloud-rust".
+        gcp_client_repo: String,
+        /// The crate name of the client library, for example google-cloud-storage.
+        gcp_client_artifact: Option<String>,
+    }
+
+    impl HttpSpanInfo {
+        pub(crate) fn from_request(
+            request: &reqwest::Request,
+            options: &RequestOptions,
+            instrumentation: Option<&InstrumentationClientInfo>,
+            prior_attempt_count: u32,
+        ) -> Self {
+            let url = request.url();
+            let method = request.method();
+
+            let url_template = gax::options::internal::get_path_template(options);
+            let otel_name = url_template.map_or_else(
+                || method.to_string(),
+                |template| format!("{} {}", method, template),
+            );
+
+            let http_request_resend_count = if prior_attempt_count > 0 {
+                Some(prior_attempt_count as i64)
+            } else {
+                None
+            };
+
+            let (gcp_client_service, gcp_client_version, gcp_client_artifact, url_domain) =
+                instrumentation.map_or((None, None, None, None), |info| {
+                    (
+                        Some(info.service_name.to_string()),
+                        Some(info.client_version.to_string()),
+                        Some(info.client_artifact.to_string()),
+                        Some(info.default_host.to_string()),
+                    )
+                });
+
+            Self {
+                rpc_system: "http".to_string(),
+                otel_kind: "Client".to_string(),
+                otel_name,
+                otel_status: OtelStatus::Unset,
+                http_request_method: method.to_string(),
+                server_address: url.host_str().map(String::from).unwrap_or_default(),
+                server_port: url.port_or_known_default().map(|p| p as i64).unwrap_or(0),
+                url_full: url.to_string(),
+                url_scheme: Some(url.scheme().to_string()),
+                url_template: url_template.map(String::from),
+                url_domain,
+                http_response_status_code: None,
+                error_type: None,
+                http_request_resend_count,
+                gcp_client_service,
+                gcp_client_version,
+                gcp_client_repo: "googleapis/google-cloud-rust".to_string(),
+                gcp_client_artifact,
             }
-            Err(err) => {
-                self.otel_status = OtelStatus::Error;
-                let name = match err {
-                    e if e.is_timeout() => "TIMEOUT",
-                    e if e.is_connect() => "CONNECTION_ERROR",
-                    e if e.is_request() => "REQUEST_ERROR",
-                    _ => "UNKNOWN",
-                };
-                self.error_type = Some(name.to_string());
+        }
+
+        /// Updates the span info based on the outcome of the HTTP request.
+        ///
+        /// This method should be called after the request has completed, it will fill in any parts of
+        /// the span that depend on the result of the request.
+        pub(crate) fn update_from_response(
+            &mut self,
+            result: &Result<reqwest::Response, reqwest::Error>,
+        ) {
+            match result {
+                Ok(response) => {
+                    self.http_response_status_code = Some(response.status().as_u16() as i64);
+                    if response.status().is_success() {
+                        self.otel_status = OtelStatus::Ok;
+                    } else {
+                        self.otel_status = OtelStatus::Error;
+                        self.error_type = Some(response.status().to_string());
+                    }
+                }
+                Err(err) => {
+                    self.otel_status = OtelStatus::Error;
+                    let name = match err {
+                        e if e.is_timeout() => "TIMEOUT",
+                        e if e.is_connect() => "CONNECTION_ERROR",
+                        e if e.is_request() => "REQUEST_ERROR",
+                        _ => "UNKNOWN",
+                    };
+                    self.error_type = Some(name.to_string());
+                }
             }
         }
     }
@@ -177,7 +226,7 @@ impl HttpSpanInfo {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::http::*; // Updated use path
     use crate::options::InstrumentationClientInfo;
     use gax::options::RequestOptions;
     use http::Method;
