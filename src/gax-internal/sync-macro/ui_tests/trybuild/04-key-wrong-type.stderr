@@ -1,0 +1,5 @@
+error: Key const KEY_FOO must be of type &str
+ --> ui_tests/trybuild/04-key-wrong-type.rs:7:24
+  |
+7 |         const KEY_FOO: i32 = 5;
+  |                        ^^^

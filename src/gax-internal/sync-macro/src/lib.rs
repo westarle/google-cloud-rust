@@ -1,12 +1,7 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{
-    parse::{Parse, ParseStream},
-    parse_macro_input,
-    visit::{self, Visit},
-    Fields, Ident, ItemConst, ItemMod, ItemStruct, Meta, Result, Token, Type,
-};
 use std::collections::{HashMap, HashSet};
+use syn::{    parse::{Parse, ParseStream},    parse_macro_input,    spanned::Spanned,    visit::{self, Visit},    Fields, Ident, ItemConst, ItemMod, ItemStruct, Meta, Result, Token, Type,};
 
 struct MacroArgs {
     struct_name: Ident,
@@ -156,6 +151,7 @@ fn normalize_key_to_field(key_suffix: &str) -> String {
 
 #[proc_macro_attribute]
 pub fn ensure_keys_and_fields_in_sync(args: TokenStream, input: TokenStream) -> TokenStream {
+    let args_span = proc_macro2::TokenStream::from(args.clone()).span();
     let macro_args = parse_macro_input!(args as MacroArgs);
     let input_mod = parse_macro_input!(input as ItemMod);
 
@@ -193,10 +189,10 @@ pub fn ensure_keys_and_fields_in_sync(args: TokenStream, input: TokenStream) -> 
 
     if visitor.key_consts.is_empty() {
         return syn::Error::new(
-            input_mod.ident.span(), // Approx span
+            args_span,
             format!(
-                "No key consts found starting with '{}'",
-                macro_args.key_prefix
+                "No key consts found starting with '{}_' in module '{}'",
+                macro_args.key_prefix, input_mod.ident
             ),
         )
         .to_compile_error()

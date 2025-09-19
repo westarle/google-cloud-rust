@@ -1,0 +1,5 @@
+error: Struct MyStruct not found in module
+ --> ui_tests/trybuild/02-struct-not-found.rs:5:52
+  |
+5 |     #[ensure_keys_and_fields_in_sync(struct_name = "MyStruct")]
+  |                                                    ^^^^^^^^^^

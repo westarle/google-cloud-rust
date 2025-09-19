@@ -1,0 +1,5 @@
+error: No key consts found starting with 'KEY_' in module 'test'
+ --> ui_tests/trybuild/03-no-keys.rs:5:38
+  |
+5 |     #[ensure_keys_and_fields_in_sync(struct_name = "MyStruct")]
+  |                                      ^^^^^^^^^^^

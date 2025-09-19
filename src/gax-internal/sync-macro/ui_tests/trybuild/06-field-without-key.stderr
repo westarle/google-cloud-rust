@@ -1,0 +1,5 @@
+error: Field 'bar' in struct MyStruct has no corresponding key const named KEY_BAR
+  --> ui_tests/trybuild/06-field-without-key.rs:10:13
+   |
+10 |             bar: i32, // No KEY_BAR
+   |             ^^^
