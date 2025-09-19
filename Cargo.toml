@@ -55,6 +55,7 @@ members = [
   "src/firestore",
   "src/gax",
   "src/gax-internal",
+  "src/gax-internal/sync-macro",
   "src/generated/api/apikeys/v2",
   "src/generated/api/cloudquotas/v1",
   "src/generated/api/servicecontrol/v1",
