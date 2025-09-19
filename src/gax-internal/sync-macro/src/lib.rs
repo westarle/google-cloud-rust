@@ -6,7 +6,7 @@ use syn::{
     visit::{self, Visit},
     Fields, Ident, ItemConst, ItemMod, ItemStruct, Meta, Result, Token, Type,
 };
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 struct MacroArgs {
     struct_name: Ident,
@@ -217,17 +217,60 @@ pub fn ensure_keys_and_fields_in_sync(args: TokenStream, input: TokenStream) -> 
             .into();
     }
 
-    let mut key_map = HashSet::new();
     let prefix = format!("{}_", macro_args.key_prefix);
-    for key_const in visitor.key_consts {
+    let mut defined_keys = HashMap::new(); // Map normalized field name to const Ident
+    for key_const in &visitor.key_consts {
         let const_name = key_const.ident.to_string();
         let suffix = const_name.trim_start_matches(&prefix);
         let field_name = normalize_key_to_field(suffix);
-        key_map.insert(field_name);
+        defined_keys.insert(field_name, key_const.ident.clone());
     }
 
-    // TODO: Implement Pass 3: Verification
-    // For now, just return the original module
+    // Pass 3: Verification
+    let mut errors = Vec::<syn::Error>::new();
+
+    // Check for keys without corresponding fields
+    for (field_name, key_ident) in &defined_keys {
+        if !field_names.contains(field_name) {
+            errors.push(syn::Error::new_spanned(
+                key_ident,
+                format!(
+                    "Key const {} has no corresponding field '{}' in struct {}",
+                    key_ident, field_name, macro_args.struct_name
+                ),
+            ));
+        }
+    }
+
+    // Check for fields without corresponding keys
+    if let Fields::Named(ref fields_named) = target_struct.fields {
+        for field in &fields_named.named {
+            if let Some(field_ident) = &field.ident {
+                let field_name = field_ident.to_string();
+                if !defined_keys.contains_key(&field_name) {
+                     let expected_key_suffix = field_name.to_uppercase();
+                     let expected_key_name = format!("{}{}", prefix, expected_key_suffix);
+                     errors.push(syn::Error::new_spanned(
+                        field_ident,
+                        format!(
+                            "Field '{}' in struct {} has no corresponding key const named {}",
+                            field_name, macro_args.struct_name, expected_key_name
+                        ),
+                    ));
+                }
+            }
+        }
+    }
+
+    if !errors.is_empty() {
+        let mut combined_error = errors.remove(0);
+        for err in errors {
+            combined_error.combine(err);
+        }
+        return combined_error.to_compile_error().into();
+    }
+
+    // If all checks pass, return the original module
     TokenStream::from(quote! {
         #input_mod
     })

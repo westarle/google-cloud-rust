@@ -13,3 +13,7 @@ proc-macro2 = "1.0"
 
 [dev-dependencies]
 trybuild = "1.0"
+
+[[test]]
+name = "ui"
+path = "ui_tests/ui.rs"
