@@ -37,10 +37,6 @@ pub mod query_parameter;
 pub mod http;
 
 #[cfg(feature = "_internal-http-client")]
-use sync_keys_fields_macro::ensure_keys_and_fields_in_sync;
-
-#[cfg(feature = "_internal-http-client")]
-#[ensure_keys_and_fields_in_sync(struct_name = "HttpSpanInfo")]
 pub mod observability;
 
 #[cfg(feature = "_internal-grpc-client")]
