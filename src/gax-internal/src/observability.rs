@@ -16,19 +16,16 @@
 
 use crate::options::InstrumentationClientInfo;
 use gax::options::RequestOptions;
-use opentelemetry_semantic_conventions::{attribute as otel_attr, trace as otel_trace};
-use tracing::Span;
-
-use std::time::{Duration, Instant};
-use tonic::Status;
-use tower::Layer;
-
 use http::Request;
 use http_body_util::combinators::UnsyncBoxBody;
+use opentelemetry_semantic_conventions::{attribute as otel_attr, trace as otel_trace};
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
-use tower::Service;
+use std::time::{Duration, Instant};
+use tonic::Status;
+use tower::{Layer, Service};
+use tracing::{warn, Instrument, Span};
 
 /// Holds information required to create and finalize a gRPC network span.
 #[derive(Debug)]
@@ -122,9 +119,52 @@ where
     }
 
     fn call(&mut self, req: Request<UnsyncBoxBody<bytes::Bytes, tonic::Status>>) -> Self::Future {
-        // TODO: Implement span creation and context injection in next PR
-        Box::pin(self.inner.call(req))
+        let path = req.uri().path();
+        let mut parts = path.trim_start_matches('/').split('/');
+        let service_method = parts.next().unwrap_or_default();
+        let mut service_method_parts = service_method.split('.');
+        let rpc_service = service_method_parts.next().unwrap_or_default().to_string();
+        let rpc_method = service_method_parts.next().unwrap_or_default().to_string();
+
+        if rpc_service.is_empty() || rpc_method.is_empty() {
+            warn!("Failed to parse RPC service and method from URI path: {}", path);
+            return Box::pin(self.inner.call(req));
+        }
+
+        let span_info = GrpcSpanInfo::new(
+            rpc_service,
+            rpc_method,
+            self.layer.server_address.clone(),
+            self.layer.server_port,
+            self.layer.url_domain.clone(),
+            self.layer.client_info,
+        );
+
+        let span = tracing::info_span!(
+            "grpc.request",
+            otel.name = format!("{}/{}", span_info.rpc_service, span_info.rpc_method),
+            otel.kind = "Client",
+            otel.status = "", // Will be set in ResponseFuture
+            rpc.system = "grpc",
+            rpc.service = span_info.rpc_service.as_str(),
+            rpc.method = span_info.rpc_method.as_str(),
+            server.address = span_info.server_address.as_str(),
+            server.port = span_info.server_port,
+            url.domain = span_info.url_domain.as_str(),
+            // TODO: Add gcp.client.* attributes if client_info is Some
+        );
+
+        // TODO: Inject tracing context into request headers if needed for propagation
+
+        let future = self.inner.call(req).instrument(span.clone());
+
+        // TODO: Return a ResponseFuture that will finalize the span
+        Box::pin(async move {
+            // Placeholder for ResponseFuture logic
+            future.await
+        })
     }
+// ...
 }
 
 // OpenTelemetry Semantic Convention Keys
