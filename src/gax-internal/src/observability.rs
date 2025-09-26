@@ -23,6 +23,13 @@ use std::time::{Duration, Instant};
 use tonic::Status;
 use tower::Layer;
 
+use http::Request;
+use http_body_util::combinators::UnsyncBoxBody;
+use std::future::Future;
+use std::pin::Pin;
+use std::task::{Context, Poll};
+use tower::Service;
+
 /// Holds information required to create and finalize a gRPC network span.
 #[derive(Debug)]
 pub(crate) struct GrpcSpanInfo {
@@ -85,11 +92,38 @@ impl GrpcTowerLayer {
 }
 
 impl<S> Layer<S> for GrpcTowerLayer {
-    type Service = S; // TODO: Replace with GrpcTowerService in next PR
+    type Service = GrpcTowerService<S>;
 
-    fn layer(&self, service: S) -> Self::Service {
-        // TODO: Wrap in GrpcTowerService in next PR
-        service
+    fn layer(&self, inner: S) -> Self::Service {
+        GrpcTowerService {
+            inner,
+            layer: self.clone(),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct GrpcTowerService<S> {
+    inner: S,
+    layer: GrpcTowerLayer,
+}
+
+impl<S> Service<Request<UnsyncBoxBody<bytes::Bytes, tonic::Status>>> for GrpcTowerService<S>
+where
+    S: Service<Request<UnsyncBoxBody<bytes::Bytes, tonic::Status>>> + Clone + Send + 'static,
+    S::Future: Send + 'static,
+{
+    type Response = S::Response;
+    type Error = S::Error;
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
+
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.inner.poll_ready(cx)
+    }
+
+    fn call(&mut self, req: Request<UnsyncBoxBody<bytes::Bytes, tonic::Status>>) -> Self::Future {
+        // TODO: Implement span creation and context injection in next PR
+        Box::pin(self.inner.call(req))
     }
 }
 
@@ -400,6 +434,37 @@ mod tests {
         );
         assert!(layer.client_info.is_some());
         assert_eq!(layer.server_address, "example.com");
+    }
+
+    fn test_grpc_tower_service() {
+        use super::*;
+        use bytes::Bytes;
+        use http_body_util::{combinators::UnsyncBoxBody, Empty, BodyExt};
+        use std::task::{Context, Poll};
+        use tower::{Layer, Service};
+        use http::Request;
+        use std::future::Future;
+        use std::pin::Pin;
+
+        // Dummy service for testing
+        #[derive(Clone)]
+        struct DummyService;
+        impl Service<Request<UnsyncBoxBody<Bytes, tonic::Status>>> for DummyService {
+            type Response = http::Response<UnsyncBoxBody<Bytes, tonic::Status>>;
+            type Error = tonic::transport::Error;
+            type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
+
+            fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+                Poll::Ready(Ok(()))
+            }
+            fn call(&mut self, _req: Request<UnsyncBoxBody<Bytes, tonic::Status>>) -> Self::Future {
+                Box::pin(async { Ok(http::Response::new(UnsyncBoxBody::new(Empty::<Bytes>::new()).map_err(|_| unreachable!()).boxed_unsync())) })
+            }
+        }
+
+        let layer = GrpcTowerLayer::new("example.com".to_string(), 443, "example.com".to_string(), None);
+        let service = layer.layer(DummyService);
+        assert!(service.layer.client_info.is_none());
     }
 
     #[tokio::test]

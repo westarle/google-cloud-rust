@@ -91,13 +91,18 @@ wkt  = { workspace = true, optional = true }
 [dev-dependencies]
 anyhow.workspace      = true
 httptest.workspace    = true
-bytes.workspace       = true
+bytes                 = { workspace = true }
+http                  = { workspace = true }
+http-body-util        = { workspace = true }
+hyper                 = { workspace = true, features = ["full"] }
 mockall.workspace     = true
 scoped-env.workspace  = true
 serde_with.workspace  = true
 serial_test.workspace = true
 test-case.workspace   = true
 tokio                 = { workspace = true, features = ["test-util"] }
+tonic                 = { workspace = true }
+tower                 = { workspace = true }
 tracing               = { workspace = true, features = ["std"] }
 tracing-subscriber    = { workspace = true, features = ["registry", "std"] }
 # Local crates
