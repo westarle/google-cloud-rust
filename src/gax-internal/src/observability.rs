@@ -16,7 +16,9 @@
 
 use crate::options::InstrumentationClientInfo;
 use gax::options::RequestOptions;
+use metrics::Label;
 use opentelemetry_semantic_conventions::{attribute as otel_attr, trace as otel_trace};
+use std::vec::Vec;
 use tracing::Span;
 
 // OpenTelemetry Semantic Convention Keys
@@ -142,6 +144,10 @@ pub(crate) struct HttpSpanInfo {
     ///
     /// None for the first attempt.
     http_request_resend_count: Option<i64>,
+    /// The version of the network protocol.
+    ///
+    /// Examples: 1.1, 2.0
+    network_protocol_version: Option<String>,
 
     // Custom GCP Attributes
     /// The Google Cloud service name.
@@ -160,6 +166,8 @@ pub(crate) struct HttpSpanInfo {
     ///
     /// Example: google-cloud-storage
     gcp_client_artifact: Option<String>,
+    // For as_metric_labels
+    client_info: Option<&'static InstrumentationClientInfo>,
 }
 
 impl HttpSpanInfo {
@@ -209,10 +217,12 @@ impl HttpSpanInfo {
             http_response_status_code: None,
             error_type: None,
             http_request_resend_count,
+            network_protocol_version: None, // TODO: Extract from response
             gcp_client_service,
             gcp_client_version,
             gcp_client_repo: "googleapis/google-cloud-rust".to_string(),
             gcp_client_artifact,
+            client_info: instrumentation,
         }
     }
 
@@ -233,6 +243,7 @@ impl HttpSpanInfo {
                     self.otel_status = OtelStatus::Error;
                     self.error_type = Some(response.status().to_string());
                 }
+                // TODO: Extract network_protocol_version from response.version()
             }
             Err(err) => {
                 self.otel_status = OtelStatus::Error;
@@ -268,6 +279,69 @@ impl HttpSpanInfo {
             { otel_trace::HTTP_REQUEST_RESEND_COUNT } = self.http_request_resend_count,
         )
     }
+
+    pub(crate) fn as_metric_labels(&self) -> Vec<Label> {
+        let mut labels = Vec::with_capacity(16);
+
+        // Required
+        labels.push(Label::new(
+            otel_trace::HTTP_REQUEST_METHOD,
+            self.http_request_method.clone(),
+        ));
+        labels.push(Label::new(
+            otel_trace::SERVER_ADDRESS,
+            self.server_address.clone(),
+        ));
+        labels.push(Label::new(
+            otel_trace::SERVER_PORT,
+            self.server_port.to_string(),
+        ));
+        if let Some(scheme) = &self.url_scheme {
+            labels.push(Label::new(otel_trace::URL_SCHEME, scheme.clone()));
+        }
+
+        // Conditionally Required
+        if let Some(status_code) = &self.http_response_status_code {
+            labels.push(Label::new(
+                otel_trace::HTTP_RESPONSE_STATUS_CODE,
+                status_code.to_string(),
+            ));
+        }
+        if let Some(error_type) = &self.error_type {
+            labels.push(Label::new(otel_trace::ERROR_TYPE, error_type.clone()));
+        }
+
+        // Recommended
+        if let Some(resend_count) = &self.http_request_resend_count {
+            labels.push(Label::new(
+                otel_trace::HTTP_REQUEST_RESEND_COUNT,
+                resend_count.to_string(),
+            ));
+        }
+        labels.push(Label::new(otel_trace::NETWORK_PROTOCOL_NAME, "http"));
+        if let Some(protocol_version) = &self.network_protocol_version {
+            labels.push(Label::new(
+                otel_trace::NETWORK_PROTOCOL_VERSION,
+                protocol_version.clone(),
+            ));
+        }
+        if let Some(template) = &self.url_template {
+            labels.push(Label::new(otel_attr::URL_TEMPLATE, template.to_string()));
+        }
+        if let Some(domain) = &self.url_domain {
+            labels.push(Label::new(otel_attr::URL_DOMAIN, domain.to_string()));
+        }
+
+        // Custom Google Attributes
+        if let Some(info) = self.client_info {
+            labels.push(Label::new(KEY_GCP_CLIENT_SERVICE, info.service_name));
+            labels.push(Label::new(KEY_GCP_CLIENT_VERSION, info.client_version));
+            labels.push(Label::new(KEY_GCP_CLIENT_ARTIFACT, info.client_artifact));
+        }
+        labels.push(Label::new(KEY_GCP_CLIENT_REPO, self.gcp_client_repo.clone()));
+
+        labels
+    }
 }
 
 #[cfg(test)]
@@ -279,8 +353,8 @@ mod tests {
     use reqwest;
     use std::collections::HashMap;
     use std::sync::{Arc, Mutex};
-    use tracing::{Subscriber, span};
-    use tracing_subscriber::{Layer, layer::Context};
+    use tracing::{span, Subscriber};
+    use tracing_subscriber::{layer::Context, Layer};
 
     #[tokio::test]
     async fn test_http_span_info_from_request_basic() {
@@ -546,5 +620,86 @@ mod tests {
         .collect();
 
         assert_eq!(attributes, &expected);
+    }
+
+    #[test]
+    fn test_as_metric_labels_basic() {
+        let client_info = InstrumentationClientInfo {
+            service_name: "test-service",
+            client_version: "0.1.0",
+            client_artifact: "test-artifact",
+            default_host: "test.googleapis.com",
+        };
+        let span_info = HttpSpanInfo {
+            otel_kind: "Client".to_string(),
+            otel_name: "GET /v1/test".to_string(),
+            otel_status: OtelStatus::Ok,
+            rpc_system: "http".to_string(),
+            http_request_method: "GET".to_string(),
+            server_address: "test.googleapis.com".to_string(),
+            server_port: 443,
+            url_full: "https://test.googleapis.com/v1/test".to_string(),
+            url_scheme: Some("https".to_string()),
+            url_template: Some("/v1/test"),
+            url_domain: Some("test.googleapis.com".to_string()),
+            http_response_status_code: Some(200),
+            error_type: None,
+            http_request_resend_count: Some(0),
+            network_protocol_version: Some("1.1".to_string()),
+            gcp_client_service: Some("test-service".to_string()),
+            gcp_client_version: Some("0.1.0".to_string()),
+            gcp_client_artifact: Some("test-artifact".to_string()),
+            gcp_client_repo: "googleapis/google-cloud-rust".to_string(),
+            client_info: Some(&client_info),
+        };
+
+        let labels = span_info.as_metric_labels();
+
+        assert!(labels.contains(&Label::new("http.request.method", "GET")));
+        assert!(labels.contains(&Label::new("server.address", "test.googleapis.com")));
+        assert!(labels.contains(&Label::new("url.scheme", "https")));
+        assert!(labels.contains(&Label::new("server.port", "443")));
+        assert!(labels.contains(&Label::new("http.response.status_code", "200")));
+        assert!(labels.contains(&Label::new("network.protocol.name", "http")));
+        assert!(labels.contains(&Label::new("network.protocol.version", "1.1")));
+        assert!(labels.contains(&Label::new("http.request.resend_count", "0")));
+        assert!(labels.contains(&Label::new("url.template", "/v1/test")));
+        assert!(labels.contains(&Label::new("url.domain", "test.googleapis.com")));
+        assert!(labels.contains(&Label::new("gcp.client.service", "test-service")));
+        assert!(labels.contains(&Label::new("gcp.client.version", "0.1.0")));
+        assert!(labels.contains(&Label::new("gcp.client.artifact", "test-artifact")));
+        assert!(labels.contains(&Label::new("gcp.client.repo", "googleapis/google-cloud-rust")));
+        assert_eq!(labels.len(), 14);
+    }
+
+    #[test]
+    fn test_as_metric_labels_error() {
+        let span_info = HttpSpanInfo {
+            otel_kind: "Client".to_string(),
+            otel_name: "POST".to_string(),
+            otel_status: OtelStatus::Error,
+            rpc_system: "http".to_string(),
+            http_request_method: "POST".to_string(),
+            server_address: "error.com".to_string(),
+            server_port: 80,
+            url_full: "http://error.com/".to_string(),
+            url_scheme: Some("http".to_string()),
+            url_template: None,
+            url_domain: Some("error.com".to_string()),
+            http_response_status_code: Some(500),
+            error_type: Some("INTERNAL".to_string()),
+            http_request_resend_count: None,
+            network_protocol_version: None,
+            gcp_client_service: None,
+            gcp_client_version: None,
+            gcp_client_artifact: None,
+            gcp_client_repo: "googleapis/google-cloud-rust".to_string(),
+            client_info: None,
+        };
+
+        let labels = span_info.as_metric_labels();
+        assert!(labels.contains(&Label::new("error.type", "INTERNAL")));
+        assert!(labels.contains(&Label::new("http.response.status_code", "500")));
+        assert_eq!(labels.len(), 7); // method, server, port, scheme, status, error, repo
     }
 }
