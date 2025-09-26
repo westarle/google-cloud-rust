@@ -117,7 +117,7 @@ use std::sync::Arc;
 ///   
 #[derive(Clone, Debug)]
 pub struct Response<T> {
-    parts: Parts,
+    pub parts: Parts,
     body: T,
 }
 
