@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::observability::{HttpSpanInfo, NetworkRequestSummary};
 use auth::credentials::{CacheableResource, Credentials};
 use gax::Result;
 use gax::backoff_policy::BackoffPolicy;
@@ -156,12 +157,19 @@ impl ReqwestClient {
             Ok(CacheableResource::New { data, .. }) => builder.headers(data),
             Ok(CacheableResource::NotModified) => unreachable!("headers are not cached"),
         };
-        let response = builder.send().await.map_err(Self::map_send_error)?;
+
+        let req = builder.build().map_err(Error::io)?;
+        let mut span_info = HttpSpanInfo::from_request(&req, options, self.instrumentation, 0); // TODO: Handle prior_attempt_count
+
+        let result = self.inner.execute(req).await;
+        span_info.update_from_response(&result);
+
+        let response = result.map_err(Self::map_send_error)?;
         if !response.status().is_success() {
-            return self::to_http_error(response).await;
+            return self::to_http_error(response, span_info).await;
         }
 
-        self::to_http_response(response).await
+        self::to_http_response(response, span_info).await
     }
 
     fn map_send_error(err: reqwest::Error) -> Error {
@@ -237,7 +245,10 @@ pub fn default_idempotency(m: &Method) -> bool {
     m == Method::GET || m == Method::PUT || m == Method::DELETE
 }
 
-pub async fn to_http_error<O>(response: reqwest::Response) -> Result<O> {
+pub async fn to_http_error<O>(
+    response: reqwest::Response,
+    _span_info: crate::observability::HttpSpanInfo,
+) -> Result<O> {
     let status_code = response.status().as_u16();
     let response = http::Response::from(response);
     let (parts, body) = response.into_parts();
@@ -258,6 +269,7 @@ pub async fn to_http_error<O>(response: reqwest::Response) -> Result<O> {
 
 async fn to_http_response<O: serde::de::DeserializeOwned + Default>(
     response: reqwest::Response,
+    span_info: crate::observability::HttpSpanInfo,
 ) -> Result<Response<O>> {
     // 204 No Content has no body and throws EOF error if we try to parse with serde::json
     let no_content_status = response.status() == reqwest::StatusCode::NO_CONTENT;
@@ -273,10 +285,10 @@ async fn to_http_response<O: serde::de::DeserializeOwned + Default>(
         content => serde_json::from_slice::<O>(&content).map_err(Error::deser)?,
     };
 
-    Ok(Response::from_parts(
-        Parts::new().set_headers(parts.headers),
-        response,
-    ))
+    let mut parts = Parts::new().set_headers(parts.headers);
+    parts.observability_summary = Some(Arc::new(NetworkRequestSummary::Http(span_info)));
+
+    Ok(Response::from_parts(parts, response))
 }
 
 #[cfg(test)]
@@ -296,7 +308,7 @@ mod tests {
             .body(r#"{"error": "bad request"}"#)?;
         let response: reqwest::Response = http_resp.into();
         assert!(response.status().is_client_error());
-        let response = super::to_http_error::<()>(response).await;
+        let response = super::to_http_error::<()>(response, HttpSpanInfo::default()).await;
         assert!(response.is_err(), "{response:?}");
         let err = response.err().unwrap();
         assert_eq!(err.http_status_code(), Some(400));
@@ -329,7 +341,7 @@ mod tests {
             .body(body.to_string())?;
         let response: reqwest::Response = http_resp.into();
         assert!(response.status().is_client_error());
-        let response = super::to_http_error::<()>(response).await;
+        let response = super::to_http_error::<()>(response, HttpSpanInfo::default()).await;
         assert!(response.is_err(), "{response:?}");
         let err = response.err().unwrap();
         let want_status = Status::default()
@@ -356,7 +368,8 @@ mod tests {
         let response = resp_from_code_content(code, content)?;
         assert!(response.status().is_success());
 
-        let response = super::to_http_response::<wkt::Empty>(response).await;
+        let response =
+            super::to_http_response::<wkt::Empty>(response, HttpSpanInfo::default()).await;
         assert!(response.is_ok());
 
         let response = response.unwrap();
@@ -374,7 +387,8 @@ mod tests {
         let response = resp_from_code_content(code, content)?;
         assert!(response.status().is_success());
 
-        let response = super::to_http_response::<wkt::Empty>(response).await;
+        let response =
+            super::to_http_response::<wkt::Empty>(response, HttpSpanInfo::default()).await;
         assert!(response.is_err());
         Ok(())
     }
