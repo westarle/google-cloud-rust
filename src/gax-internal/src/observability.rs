@@ -17,6 +17,7 @@ use gax::error::Error;
 use gax::options::RequestOptions;
 use gax::response::Response;
 use opentelemetry_semantic_conventions::{attribute as otel_attr, trace as otel_trace};
+use std::any::Any;
 use tracing::{Level, Span};
 
 // OpenTelemetry Semantic Convention Keys
@@ -352,6 +353,24 @@ pub fn record_network_summary(summary: &NetworkRequestSummary) {
         }
         NetworkRequestSummary::None => {}
     }
+}
+
+/// Enriches the span with details from the response parts.
+pub fn enrich_client_request_span<T>(response: &Response<T>, span: &Span) {
+    if let Some(summary_any) = &response.parts.observability_summary {
+        if let Some(summary) = summary_any.downcast_ref::<NetworkRequestSummary>() {
+            span.in_scope(|| {
+                record_network_summary(summary);
+            });
+        }
+    }
+}
+
+/// Enriches the span with details from an error.
+pub fn enrich_client_request_span_err(error: &Error, span: &Span) {
+    span.in_scope(|| {
+        Span::current().record(ERROR_TYPE, &error.to_string());
+    });
 }
 
 #[cfg(test)]
@@ -714,10 +733,6 @@ mod tests {
             (
                 KEY_GCP_CLIENT_REPO.to_string(),
                 "googleapis/google-cloud-rust".to_string(),
-            ),
-            (
-                otel_trace::HTTP_REQUEST_RESEND_COUNT.to_string(),
-                "0".to_string(),
             ),
         ]
         .into_iter()
