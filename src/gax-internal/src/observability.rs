@@ -70,6 +70,7 @@ pub(crate) struct GrpcTowerLayer {
     pub(crate) server_address: String,
     pub(crate) server_port: u16,
     pub(crate) url_domain: String,
+    pub(crate) config: crate::options::ClientConfig,
 }
 
 impl GrpcTowerLayer {
@@ -78,12 +79,14 @@ impl GrpcTowerLayer {
         server_port: u16,
         url_domain: String,
         client_info: Option<&'static InstrumentationClientInfo>,
+        config: crate::options::ClientConfig,
     ) -> Self {
         Self {
             client_info,
             server_address,
             server_port,
             url_domain,
+            config,
         }
     }
 }
@@ -101,8 +104,8 @@ impl<S> Layer<S> for GrpcTowerLayer {
 
 #[derive(Clone, Debug)]
 pub(crate) struct GrpcTowerService<S> {
-    inner: S,
-    layer: GrpcTowerLayer,
+    pub inner: S,
+    pub layer: GrpcTowerLayer,
 }
 
 impl<S> Service<Request<UnsyncBoxBody<bytes::Bytes, tonic::Status>>> for GrpcTowerService<S>
@@ -119,6 +122,10 @@ where
     }
 
     fn call(&mut self, req: Request<UnsyncBoxBody<bytes::Bytes, tonic::Status>>) -> Self::Future {
+        if !crate::options::tracing_enabled(&self.layer.config) {
+            return Box::pin(self.inner.call(req));
+        }
+
         let path = req.uri().path();
         let mut parts = path.trim_start_matches('/').split('/');
         let service_method = parts.next().unwrap_or_default();
@@ -471,6 +478,7 @@ mod tests {
             443,
             "example.com".to_string(),
             Some(&TEST_INFO),
+            Default::default(),
         );
         assert!(layer.client_info.is_some());
         assert_eq!(layer.server_address, "example.com");
@@ -502,7 +510,7 @@ mod tests {
             }
         }
 
-        let layer = GrpcTowerLayer::new("example.com".to_string(), 443, "example.com".to_string(), None);
+        let layer = GrpcTowerLayer::new("example.com".to_string(), 443, "example.com".to_string(), None, Default::default());
         let service = layer.layer(DummyService);
         assert!(service.layer.client_info.is_none());
     }

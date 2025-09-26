@@ -34,17 +34,22 @@ use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::observability::{GrpcTowerLayer, GrpcTowerService};
+use crate::options::{tracing_enabled, InstrumentationClientInfo};
+use tower::Layer;
+
 pub type InnerClient = tonic::client::Grpc<tonic::transport::Channel>;
 
 #[derive(Clone, Debug)]
 pub struct Client {
-    inner: InnerClient,
+    inner: GrpcTowerService<InnerClient>,
     credentials: Credentials,
     retry_policy: Arc<dyn RetryPolicy>,
     backoff_policy: Arc<dyn BackoffPolicy>,
     retry_throttler: SharedRetryThrottler,
     polling_error_policy: Arc<dyn PollingErrorPolicy>,
     polling_backoff_policy: Arc<dyn PollingBackoffPolicy>,
+    instrumentation: Option<&'static InstrumentationClientInfo>,
 }
 
 impl Client {
@@ -54,7 +59,23 @@ impl Client {
         default_endpoint: &str,
     ) -> gax::client_builder::Result<Self> {
         let credentials = Self::make_credentials(&config).await?;
-        let inner = Self::make_inner(config.endpoint, default_endpoint).await?;
+        let endpoint = config.endpoint.clone().unwrap_or_else(|| default_endpoint.to_string());
+        let raw_inner = Self::make_inner(config.endpoint.clone(), default_endpoint).await?;
+
+        let uri = Uri::from_str(&endpoint).map_err(BuilderError::transport)?;
+        let server_address = uri.host().unwrap_or_default().to_string();
+        let server_port = uri.port_u16().unwrap_or(443);
+        let url_domain = server_address.clone();
+
+        let layer = GrpcTowerLayer::new(
+            server_address,
+            server_port,
+            url_domain,
+            None, // Instrumentation will be set later by with_instrumentation
+            config.clone(),
+        );
+        let inner = layer.layer(raw_inner);
+
         Ok(Self {
             inner,
             credentials,
@@ -76,7 +97,15 @@ impl Client {
             polling_backoff_policy: config
                 .polling_backoff_policy
                 .unwrap_or_else(|| Arc::new(ExponentialBackoff::default())),
+            instrumentation: None,
         })
+    }
+
+    /// Sets the instrumentation client info.
+    pub fn with_instrumentation(mut self, instrumentation: Option<&'static crate::options::InstrumentationClientInfo>) -> Self {
+        self.instrumentation = instrumentation;
+        self.inner.layer.client_info = instrumentation;
+        self
     }
 
     /// Sends a request.
@@ -177,7 +206,7 @@ impl Client {
             request.set_timeout(timeout);
         }
         let codec = tonic_prost::ProstCodec::<Request, Response>::default();
-        let mut inner = self.inner.clone();
+        let mut inner = self.inner.inner.clone();
         inner.ready().await.map_err(Error::io)?;
         inner
             .unary(request, path, codec)
@@ -302,4 +331,29 @@ where
         gax::response::Parts::new().set_headers(metadata.into_headers()),
         body.cnv().map_err(Error::deser)?,
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::options::InstrumentationClientInfo;
+
+    #[tokio::test]
+    async fn test_with_instrumentation() {
+        let config = crate::options::ClientConfig::default();
+        let client = Client::new(config, "http://example.com").await.unwrap();
+        assert!(client.instrumentation.is_none());
+        assert!(client.inner.layer.client_info.is_none());
+
+        static TEST_INFO: InstrumentationClientInfo = InstrumentationClientInfo {
+            service_name: "test-service",
+            client_version: "1.0.0",
+            client_artifact: "test-artifact",
+            default_host: "example.com",
+        };
+        let client = client.with_instrumentation(Some(&TEST_INFO));
+        assert!(client.instrumentation.is_some());
+        assert!(client.inner.layer.client_info.is_some());
+        assert_eq!(client.inner.layer.client_info.unwrap().service_name, "test-service");
+    }
 }
