@@ -39,7 +39,19 @@ pub fn tracing_enabled(config: &ClientConfig) -> bool {
         return true;
     }
     std::env::var(LOGGING_VAR)
-        .map(|v| v == "true")
+        .map(|v| v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false)
+}
+
+pub(crate) const METRICS_VAR: &str = "GOOGLE_CLOUD_RUST_METRICS";
+
+// Returns true if the environment or client configuration enables metrics.
+pub fn metrics_enabled(config: &ClientConfig) -> bool {
+    if config.metrics {
+        return true;
+    }
+    std::env::var(METRICS_VAR)
+        .map(|v| v.eq_ignore_ascii_case("true"))
         .unwrap_or(false)
 }
 
@@ -52,12 +64,11 @@ mod tests {
     #[test]
     #[serial_test::serial]
     fn config_tracing() {
-        let _e = ScopedEnv::remove(LOGGING_VAR);
+let _e = ScopedEnv::remove(LOGGING_VAR);
         let config = ClientConfig::default();
         assert!(!tracing_enabled(&config), "expected tracing to be disabled");
         let mut config = ClientConfig::default();
         config.tracing = true;
-        let config = config;
         assert!(tracing_enabled(&config), "expected tracing to be enabled");
 
         let _e = ScopedEnv::set(LOGGING_VAR, "true");
@@ -67,5 +78,30 @@ mod tests {
         let _e = ScopedEnv::set(LOGGING_VAR, "not-true");
         let config = ClientConfig::default();
         assert!(!tracing_enabled(&config), "expected tracing to be disabled");
+    }
+
+    // This test must run serially because it manipulates the environment.
+    #[test]
+    #[serial_test::serial]
+    fn config_metrics() {
+        let _e = ScopedEnv::remove(METRICS_VAR);
+        let config = ClientConfig::default();
+        assert!(!metrics_enabled(&config), "expected metrics to be disabled");
+
+        let mut config = ClientConfig::default();
+        config.metrics = true;
+        assert!(metrics_enabled(&config), "expected metrics to be enabled");
+
+        let _e = ScopedEnv::set(METRICS_VAR, "true");
+        let config = ClientConfig::default();
+        assert!(metrics_enabled(&config), "expected metrics to be enabled");
+
+        let _e = ScopedEnv::set(METRICS_VAR, "TRUE");
+        let config = ClientConfig::default();
+        assert!(metrics_enabled(&config), "expected metrics to be enabled for TRUE");
+
+        let _e = ScopedEnv::set(METRICS_VAR, "not-true");
+        let config = ClientConfig::default();
+        assert!(!metrics_enabled(&config), "expected metrics to be disabled");
     }
 }

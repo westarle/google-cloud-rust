@@ -166,8 +166,6 @@ pub(crate) struct HttpSpanInfo {
     ///
     /// Example: google-cloud-storage
     gcp_client_artifact: Option<String>,
-    // For as_metric_labels
-    client_info: Option<&'static InstrumentationClientInfo>,
 }
 
 impl HttpSpanInfo {
@@ -222,7 +220,6 @@ impl HttpSpanInfo {
             gcp_client_version,
             gcp_client_repo: "googleapis/google-cloud-rust".to_string(),
             gcp_client_artifact,
-            client_info: instrumentation,
         }
     }
 
@@ -333,10 +330,14 @@ impl HttpSpanInfo {
         }
 
         // Custom Google Attributes
-        if let Some(info) = self.client_info {
-            labels.push(Label::new(KEY_GCP_CLIENT_SERVICE, info.service_name));
-            labels.push(Label::new(KEY_GCP_CLIENT_VERSION, info.client_version));
-            labels.push(Label::new(KEY_GCP_CLIENT_ARTIFACT, info.client_artifact));
+        if let Some(service) = &self.gcp_client_service {
+            labels.push(Label::new(KEY_GCP_CLIENT_SERVICE, service.clone()));
+        }
+        if let Some(version) = &self.gcp_client_version {
+            labels.push(Label::new(KEY_GCP_CLIENT_VERSION, version.clone()));
+        }
+        if let Some(artifact) = &self.gcp_client_artifact {
+            labels.push(Label::new(KEY_GCP_CLIENT_ARTIFACT, artifact.clone()));
         }
         labels.push(Label::new(KEY_GCP_CLIENT_REPO, self.gcp_client_repo.clone()));
 
@@ -624,12 +625,6 @@ mod tests {
 
     #[test]
     fn test_as_metric_labels_basic() {
-        let client_info = InstrumentationClientInfo {
-            service_name: "test-service",
-            client_version: "0.1.0",
-            client_artifact: "test-artifact",
-            default_host: "test.googleapis.com",
-        };
         let span_info = HttpSpanInfo {
             otel_kind: "Client".to_string(),
             otel_name: "GET /v1/test".to_string(),
@@ -650,7 +645,6 @@ mod tests {
             gcp_client_version: Some("0.1.0".to_string()),
             gcp_client_artifact: Some("test-artifact".to_string()),
             gcp_client_repo: "googleapis/google-cloud-rust".to_string(),
-            client_info: Some(&client_info),
         };
 
         let labels = span_info.as_metric_labels();
@@ -694,12 +688,11 @@ mod tests {
             gcp_client_version: None,
             gcp_client_artifact: None,
             gcp_client_repo: "googleapis/google-cloud-rust".to_string(),
-            client_info: None,
         };
 
         let labels = span_info.as_metric_labels();
         assert!(labels.contains(&Label::new("error.type", "INTERNAL")));
         assert!(labels.contains(&Label::new("http.response.status_code", "500")));
-        assert_eq!(labels.len(), 7); // method, server, port, scheme, status, error, repo
+        assert_eq!(labels.len(), 9); // method, server, port, scheme, status, error, net.protocol, domain, repo
     }
 }

@@ -39,6 +39,7 @@ _internal-http-client = [
   "dep:gax",
   "dep:http",
   "dep:http-body-util",
+  "dep:metrics",
   "dep:opentelemetry-semantic-conventions",
   "dep:reqwest",
   "dep:rpc",
@@ -68,6 +69,7 @@ _internal-common = ["dep:auth", "dep:gax", "dep:percent-encoding", "dep:thiserro
 bytes                              = { workspace = true, optional = true, features = ["serde"] }
 http                               = { workspace = true, optional = true, features = ["std"] }
 http-body-util                     = { workspace = true, optional = true }
+metrics                            = { workspace = true, optional = true }
 opentelemetry-semantic-conventions = { workspace = true, optional = true }
 percent-encoding                   = { workspace = true, optional = true }
 prost                              = { workspace = true, optional = true }
