@@ -27,6 +27,9 @@ use http::{Extensions, Method};
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::observability;
+use crate::options;
+
 #[derive(Clone, Debug)]
 pub struct ReqwestClient {
     inner: reqwest::Client,
@@ -39,6 +42,7 @@ pub struct ReqwestClient {
     polling_error_policy: Arc<dyn PollingErrorPolicy>,
     polling_backoff_policy: Arc<dyn PollingBackoffPolicy>,
     instrumentation: Option<&'static crate::options::InstrumentationClientInfo>,
+    tracing_enabled: bool,
 }
 
 impl ReqwestClient {
@@ -49,6 +53,7 @@ impl ReqwestClient {
         let cred = Self::make_credentials(&config).await?;
         let inner = reqwest::Client::new();
         let host = crate::host::host_from_endpoint(config.endpoint.as_deref(), default_endpoint)?;
+        let tracing_enabled = options::tracing_enabled(&config);
         let endpoint = config
             .endpoint
             .unwrap_or_else(|| default_endpoint.to_string());
@@ -75,6 +80,7 @@ impl ReqwestClient {
                 .polling_backoff_policy
                 .unwrap_or_else(|| Arc::new(ExponentialBackoff::default())),
             instrumentation: None,
+            tracing_enabled,
         })
     }
 
@@ -131,11 +137,18 @@ impl ReqwestClient {
         let retry = self.get_retry_policy(&options);
         let backoff = self.get_backoff_policy(&options);
         let this = self.clone();
+
+        let attempt_count = std::cell::Cell::new(0u32);
+
         let inner = async move |d| {
             let builder = builder
                 .try_clone()
                 .expect("client libraries only create builders where `try_clone()` succeeds");
-            this.request_attempt(builder, &options, d).await
+
+            let current_attempt = attempt_count.get();
+            attempt_count.set(current_attempt + 1);
+
+            this.request_attempt(builder, &options, d, current_attempt).await
         };
         let sleep = async |d| tokio::time::sleep(d).await;
         gax::retry_loop_internal::retry_loop(inner, sleep, idempotent, throttler, retry, backoff)
@@ -147,6 +160,7 @@ impl ReqwestClient {
         mut builder: reqwest::RequestBuilder,
         options: &gax::options::RequestOptions,
         remaining_time: Option<std::time::Duration>,
+        attempt_count: u32,
     ) -> Result<Response<O>> {
         builder = gax::retry_loop_internal::effective_timeout(options, remaining_time)
             .into_iter()
@@ -156,12 +170,33 @@ impl ReqwestClient {
             Ok(CacheableResource::New { data, .. }) => builder.headers(data),
             Ok(CacheableResource::NotModified) => unreachable!("headers are not cached"),
         };
-        let response = builder.send().await.map_err(Self::map_send_error)?;
-        if !response.status().is_success() {
-            return self::to_http_error(response).await;
-        }
 
-        self::to_http_response(response).await
+        if self.tracing_enabled && self.instrumentation.is_some() {
+            let request_for_info = builder.try_clone().expect("infallible").build().map_err(Self::map_send_error)?;
+            let mut span_info = observability::HttpSpanInfo::from_request(
+                &request_for_info,
+                options,
+                self.instrumentation,
+                attempt_count,
+            );
+            let span = span_info.create_span();
+            let result = span.in_scope(|| builder.send()).await;
+
+            span_info.update_from_response(&result);
+            span_info.record_response_attributes(&span);
+
+            let response = result.map_err(Self::map_send_error)?;
+            if !response.status().is_success() {
+                return self::to_http_error(response).await;
+            }
+            self::to_http_response(response).await
+        } else {
+            let response = builder.send().await.map_err(Self::map_send_error)?;
+            if !response.status().is_success() {
+                return self::to_http_error(response).await;
+            }
+            self::to_http_response(response).await
+        }
     }
 
     fn map_send_error(err: reqwest::Error) -> Error {
