@@ -25,7 +25,8 @@ use gax::retry_policy::{Aip194Strict as RetryAip194Strict, RetryPolicy, RetryPol
 use gax::retry_throttler::SharedRetryThrottler;
 use http::{Extensions, Method};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
+use crate::observability::HttpSpanInfo;
 
 #[derive(Clone, Debug)]
 pub struct ReqwestClient {
@@ -39,6 +40,7 @@ pub struct ReqwestClient {
     polling_error_policy: Arc<dyn PollingErrorPolicy>,
     polling_backoff_policy: Arc<dyn PollingBackoffPolicy>,
     instrumentation: Option<&'static crate::options::InstrumentationClientInfo>,
+    metrics_enabled: bool,
 }
 
 impl ReqwestClient {
@@ -51,7 +53,9 @@ impl ReqwestClient {
         let host = crate::host::host_from_endpoint(config.endpoint.as_deref(), default_endpoint)?;
         let endpoint = config
             .endpoint
+            .clone()
             .unwrap_or_else(|| default_endpoint.to_string());
+        let metrics_enabled = crate::options::metrics_enabled(&config);
         Ok(Self {
             inner,
             cred,
@@ -75,6 +79,7 @@ impl ReqwestClient {
                 .polling_backoff_policy
                 .unwrap_or_else(|| Arc::new(ExponentialBackoff::default())),
             instrumentation: None,
+            metrics_enabled,
         })
     }
 
@@ -148,6 +153,15 @@ impl ReqwestClient {
         options: &gax::options::RequestOptions,
         remaining_time: Option<std::time::Duration>,
     ) -> Result<Response<O>> {
+        let start_time = Instant::now();
+        let req = builder.try_clone().expect("Failed to clone builder").build().map_err(Error::io)?;
+        let mut span_info = HttpSpanInfo::from_request(
+            &req,
+            options,
+            self.instrumentation,
+            0, // TODO: Pass actual prior attempt count
+        );
+
         builder = gax::retry_loop_internal::effective_timeout(options, remaining_time)
             .into_iter()
             .fold(builder, |b, t| b.timeout(t));
@@ -156,7 +170,16 @@ impl ReqwestClient {
             Ok(CacheableResource::New { data, .. }) => builder.headers(data),
             Ok(CacheableResource::NotModified) => unreachable!("headers are not cached"),
         };
-        let response = builder.send().await.map_err(Self::map_send_error)?;
+        let result = builder.send().await;
+        span_info.update_from_response(&result);
+
+        if self.metrics_enabled {
+            let duration = start_time.elapsed();
+            let labels = span_info.as_metric_labels();
+            metrics::histogram!("http.client.request.duration", labels).record(duration);
+        }
+
+        let response = result.map_err(Self::map_send_error)?;
         if !response.status().is_success() {
             return self::to_http_error(response).await;
         }
@@ -287,6 +310,11 @@ mod tests {
     use super::*;
     use crate::options::ClientConfig;
     use crate::options::InstrumentationClientInfo;
+    use metrics_util::debugging::{DebuggingRecorder, DebugValue};
+    use metrics_util::MetricKind;
+    use metrics::{Label, with_local_recorder};
+    use httptest::matchers::Matcher;
+    use std::sync::Arc;
 
     #[tokio::test]
     async fn client_http_error_bytes() -> TestResult {

@@ -39,6 +39,7 @@ _internal-http-client = [
   "dep:gax",
   "dep:http",
   "dep:http-body-util",
+  "dep:metrics",
   "dep:opentelemetry-semantic-conventions",
   "dep:reqwest",
   "dep:rpc",
@@ -68,6 +69,7 @@ _internal-common = ["dep:auth", "dep:gax", "dep:percent-encoding", "dep:thiserro
 bytes                              = { workspace = true, optional = true, features = ["serde"] }
 http                               = { workspace = true, optional = true, features = ["std"] }
 http-body-util                     = { workspace = true, optional = true }
+metrics                            = { workspace = true, optional = true }
 opentelemetry-semantic-conventions = { workspace = true, optional = true }
 percent-encoding                   = { workspace = true, optional = true }
 prost                              = { workspace = true, optional = true }
@@ -90,12 +92,15 @@ wkt  = { workspace = true, optional = true }
 anyhow.workspace      = true
 httptest.workspace    = true
 bytes.workspace       = true
+metrics.workspace     = true
+metrics-util.workspace = true
 mockall.workspace     = true
 scoped-env.workspace  = true
 serde_with.workspace  = true
 serial_test.workspace = true
 test-case.workspace   = true
 tokio                 = { workspace = true, features = ["test-util"] }
+tokio-test.workspace  = true
 tracing               = { workspace = true, features = ["std"] }
 tracing-subscriber    = { workspace = true, features = ["registry", "std"] }
 # Local crates

@@ -221,6 +221,15 @@ impl<F, Cr> ClientBuilder<F, Cr> {
         self
     }
 
+    /// Enables metrics.
+    ///
+    /// The client libraries can be dynamically instrumented to emit OpenTelemetry
+    /// metrics. Setting this flag enables this instrumentation.
+    pub fn with_metrics(mut self) -> Self {
+        self.config.metrics = true;
+        self
+    }
+
     /// Configure the authentication credentials.
     ///
     /// Most Google Cloud services require authentication, though some services
@@ -418,6 +427,7 @@ pub mod internal {
         pub endpoint: Option<String>,
         pub cred: Option<Cr>,
         pub tracing: bool,
+        pub metrics: bool,
         pub retry_policy: Option<Arc<dyn RetryPolicy>>,
         pub backoff_policy: Option<Arc<dyn BackoffPolicy>>,
         pub retry_throttler: SharedRetryThrottler,
@@ -433,6 +443,7 @@ pub mod internal {
                 endpoint: None,
                 cred: None,
                 tracing: false,
+                metrics: false,
                 retry_policy: None,
                 backoff_policy: None,
                 retry_throttler: Arc::new(Mutex::new(AdaptiveThrottler::default())),
