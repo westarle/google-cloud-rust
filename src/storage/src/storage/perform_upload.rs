@@ -158,7 +158,7 @@ impl<S> PerformUpload<S> {
 
 async fn handle_start_resumable_upload_response(response: reqwest::Response) -> Result<String> {
     if !response.status().is_success() {
-        return gaxi::http::to_http_error(response).await;
+        return gaxi::http::to_http_error(response, gaxi::observability::HttpSpanInfo::default()).await;
     }
     let location = response
         .headers()
@@ -179,7 +179,7 @@ async fn query_resumable_upload_handle_response(
 
 async fn handle_object_response(response: reqwest::Response) -> Result<Object> {
     if !response.status().is_success() {
-        return gaxi::http::to_http_error(response).await;
+        return gaxi::http::to_http_error(response, gaxi::observability::HttpSpanInfo::default()).await;
     }
     let response = response.json::<v1::Object>().await.map_err(Error::deser)?;
     Ok(Object::from(response))
@@ -187,7 +187,7 @@ async fn handle_object_response(response: reqwest::Response) -> Result<Object> {
 
 async fn parse_range(response: reqwest::Response) -> Result<ResumableUploadStatus> {
     let Some(end) = self::parse_range_end(response.headers()) else {
-        return gaxi::http::to_http_error(response).await;
+        return gaxi::http::to_http_error(response, gaxi::observability::HttpSpanInfo::default()).await;
     };
     // The `Range` header returns an inclusive range, i.e. bytes=0-999 means "1000 bytes".
     let persisted_size = match end {

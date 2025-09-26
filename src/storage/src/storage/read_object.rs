@@ -396,7 +396,7 @@ impl Reader {
         let builder = self.http_request_builder().await?;
         let response = builder.send().await.map_err(Error::io)?;
         if !response.status().is_success() {
-            return gaxi::http::to_http_error(response).await;
+            return gaxi::http::to_http_error(response, gaxi::observability::HttpSpanInfo::default()).await;
         }
         Ok(response)
     }
