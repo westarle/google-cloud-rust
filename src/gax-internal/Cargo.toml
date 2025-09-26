@@ -60,6 +60,7 @@ _internal-grpc-client = [
   "dep:tokio",
   "dep:tonic",
   "dep:tonic-prost",
+  "dep:tower",
   "dep:wkt",
 ]
 _internal-common = ["dep:auth", "dep:gax", "dep:percent-encoding", "dep:thiserror"]
@@ -79,6 +80,7 @@ thiserror                          = { workspace = true, optional = true }
 tokio                              = { workspace = true, optional = true, features = ["macros", "rt-multi-thread"] }
 tonic                              = { workspace = true, optional = true }
 tonic-prost                        = { workspace = true, optional = true }
+tower                              = { workspace = true, optional = true }
 tracing                            = { workspace = true, optional = true }
 # Local crates
 auth = { workspace = true, optional = true }

@@ -21,6 +21,7 @@ use tracing::Span;
 
 use std::time::{Duration, Instant};
 use tonic::Status;
+use tower::Layer;
 
 /// Holds information required to create and finalize a gRPC network span.
 #[derive(Debug)]
@@ -56,6 +57,39 @@ impl GrpcSpanInfo {
             status: None,
             duration: None,
         }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct GrpcTowerLayer {
+    pub(crate) client_info: Option<&'static InstrumentationClientInfo>,
+    pub(crate) server_address: String,
+    pub(crate) server_port: u16,
+    pub(crate) url_domain: String,
+}
+
+impl GrpcTowerLayer {
+    pub fn new(
+        server_address: String,
+        server_port: u16,
+        url_domain: String,
+        client_info: Option<&'static InstrumentationClientInfo>,
+    ) -> Self {
+        Self {
+            client_info,
+            server_address,
+            server_port,
+            url_domain,
+        }
+    }
+}
+
+impl<S> Layer<S> for GrpcTowerLayer {
+    type Service = S; // TODO: Replace with GrpcTowerService in next PR
+
+    fn layer(&self, service: S) -> Self::Service {
+        // TODO: Wrap in GrpcTowerService in next PR
+        service
     }
 }
 
@@ -348,6 +382,24 @@ mod tests {
         assert!(span_info.client_info.is_some());
         assert!(span_info.status.is_none());
         assert!(span_info.duration.is_none());
+    }
+
+    #[test]
+    fn test_grpc_tower_layer() {
+        static TEST_INFO: InstrumentationClientInfo = InstrumentationClientInfo {
+            service_name: "test-service",
+            client_version: "1.0.0",
+            client_artifact: "test-artifact",
+            default_host: "example.com",
+        };
+        let layer = GrpcTowerLayer::new(
+            "example.com".to_string(),
+            443,
+            "example.com".to_string(),
+            Some(&TEST_INFO),
+        );
+        assert!(layer.client_info.is_some());
+        assert_eq!(layer.server_address, "example.com");
     }
 
     #[tokio::test]
