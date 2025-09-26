@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Response types.
 //!
 //! This module contains types related to Google Cloud service responses.
 //! Notably it contains the `Response` type itself. Typically you'll import
@@ -61,6 +60,8 @@
 //!     Ok(Response::from(body))
 //! }
 //! ```
+
+use std::sync::Arc;
 
 /// Represents a Google Cloud service response.
 ///
@@ -237,11 +238,22 @@ impl<T> Response<T> {
 /// ```
 ///  
 /// [tower]: https://github.com/tower-rs/tower
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct Parts {
     /// The HTTP headers or the gRPC metadata converted to HTTP headers.
     pub headers: http::HeaderMap<http::HeaderValue>,
+    /// Internal data for observability purposes.
+    pub observability_summary: Option<std::sync::Arc<dyn std::any::Any + Send + Sync>>,
+}
+
+impl Default for Parts {
+    fn default() -> Self {
+        Self {
+            headers: http::HeaderMap::new(),
+            observability_summary: None,
+        }
+    }
 }
 
 impl Parts {
@@ -315,6 +327,7 @@ mod tests {
     fn parts() {
         let parts = Parts::new();
         assert!(parts.headers.is_empty());
+        assert!(parts.observability_summary.is_none());
 
         let mut headers = http::HeaderMap::new();
         headers.insert(
