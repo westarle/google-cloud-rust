@@ -19,6 +19,46 @@ use gax::options::RequestOptions;
 use opentelemetry_semantic_conventions::{attribute as otel_attr, trace as otel_trace};
 use tracing::Span;
 
+use std::time::{Duration, Instant};
+use tonic::Status;
+
+/// Holds information required to create and finalize a gRPC network span.
+#[derive(Debug)]
+pub(crate) struct GrpcSpanInfo {
+    pub rpc_service: String,
+    pub rpc_method: String,
+    pub server_address: String,
+    pub server_port: u16,
+    pub url_domain: String,
+    pub client_info: Option<&'static InstrumentationClientInfo>,
+    pub start_time: Instant,
+    pub status: Option<Status>,
+    pub duration: Option<Duration>,
+}
+
+impl GrpcSpanInfo {
+    pub fn new(
+        rpc_service: String,
+        rpc_method: String,
+        server_address: String,
+        server_port: u16,
+        url_domain: String,
+        client_info: Option<&'static InstrumentationClientInfo>,
+    ) -> Self {
+        Self {
+            rpc_service,
+            rpc_method,
+            server_address,
+            server_port,
+            url_domain,
+            client_info,
+            start_time: Instant::now(),
+            status: None,
+            duration: None,
+        }
+    }
+}
+
 // OpenTelemetry Semantic Convention Keys
 // See https://opentelemetry.io/docs/specs/semconv/http/http-spans/
 
@@ -273,14 +313,42 @@ impl HttpSpanInfo {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
+    use std::sync::{Arc, Mutex};
+    use tracing::{span, Subscriber};
+    use tracing_subscriber::{layer::Context, Layer};
     use crate::options::InstrumentationClientInfo;
     use gax::options::RequestOptions;
     use http::Method;
     use reqwest;
-    use std::collections::HashMap;
-    use std::sync::{Arc, Mutex};
-    use tracing::{Subscriber, span};
-    use tracing_subscriber::{Layer, layer::Context};
+    #[test]
+    fn test_grpc_span_info_new() {
+        use super::*;
+        static TEST_INFO: InstrumentationClientInfo = InstrumentationClientInfo {
+            service_name: "test-service",
+            client_version: "1.0.0",
+            client_artifact: "test-artifact",
+            default_host: "example.com",
+        };
+
+        let span_info = GrpcSpanInfo::new(
+            "my.service".to_string(),
+            "MyMethod".to_string(),
+            "example.com".to_string(),
+            443,
+            "example.com".to_string(),
+            Some(&TEST_INFO),
+        );
+
+        assert_eq!(span_info.rpc_service, "my.service");
+        assert_eq!(span_info.rpc_method, "MyMethod");
+        assert_eq!(span_info.server_address, "example.com");
+        assert_eq!(span_info.server_port, 443);
+        assert_eq!(span_info.url_domain, "example.com");
+        assert!(span_info.client_info.is_some());
+        assert!(span_info.status.is_none());
+        assert!(span_info.duration.is_none());
+    }
 
     #[tokio::test]
     async fn test_http_span_info_from_request_basic() {
