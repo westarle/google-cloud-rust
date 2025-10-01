@@ -33,6 +33,14 @@ pub const KEY_OTEL_STATUS: &str = "otel.status";
 pub const KEY_GRPC_STATUS: &str = "grpc.status";
 
 // Custom GCP Attributes
+/// The client library language.
+///
+/// Always "rust".
+pub const GCP_CLIENT_LANGUAGE_RUST: &str = "rust";
+
+/// The client library language key.
+pub const KEY_GCP_CLIENT_LANGUAGE: &str = "gcp.client.language";
+
 /// The Google Cloud service name.
 ///
 /// Examples: appengine, run, firestore
@@ -44,6 +52,9 @@ pub const KEY_GCP_CLIENT_VERSION: &str = "gcp.client.version";
 /// The client library repository.
 ///
 /// Always "googleapis/google-cloud-rust".
+pub const GCP_CLIENT_REPO_RUST: &str = "googleapis/google-cloud-rust";
+
+/// The client library repository key.
 pub const KEY_GCP_CLIENT_REPO: &str = "gcp.client.repo";
 /// The client library crate name.
 ///

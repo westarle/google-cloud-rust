@@ -199,6 +199,8 @@ impl ReqwestClient {
         if !response.status().is_success() {
             return self::to_http_error(response).await;
         }
+
+        // TODO: Populate TransportSpanInfo here
         self::to_http_response(response).await
     }
 
@@ -315,7 +317,6 @@ async fn to_http_response<O: serde::de::DeserializeOwned + Default>(
         Parts::new().set_headers(parts.headers),
         response,
     ))
-}
 
 #[cfg(test)]
 mod tests {
@@ -325,6 +326,12 @@ mod tests {
     use super::*;
     use crate::options::ClientConfig;
     use crate::options::InstrumentationClientInfo;
+    #[cfg(google_cloud_unstable_tracing)]
+    use crate::observability::HttpSpanInfo;
+    #[cfg(google_cloud_unstable_tracing)]
+    use gax::response::internal as response_internal;
+    #[cfg(google_cloud_unstable_tracing)]
+    use gax::options::RequestOptions;
 
     #[tokio::test]
     async fn client_http_error_bytes() -> TestResult {
@@ -524,4 +531,25 @@ mod tests {
 
         Ok(())
     }
+
+    #[cfg(google_cloud_unstable_tracing)]
+    #[tokio::test]
+    async fn test_to_http_response_with_span_info() -> TestResult {
+        let response = resp_from_code_content(reqwest::StatusCode::OK, "{}")?;
+        let request = reqwest::Request::new(reqwest::Method::GET, response.url().clone());
+        let span_info = HttpSpanInfo::from_request(&request, &RequestOptions::default(), None, 0);
+        let gax_response = super::to_http_response::<wkt::Empty>(response, Some(span_info)).await?;
+        assert!(response_internal::transport_span_info(&gax_response).is_some(), "TransportSpanInfo should be present when span_info is provided, got: {:?}", gax_response);
+        Ok(())
+    }
+
+    #[cfg(google_cloud_unstable_tracing)]
+    #[tokio::test]
+    async fn test_to_http_response_with_none_span_info() -> TestResult {
+        let response = resp_from_code_content(reqwest::StatusCode::OK, "{}")?;
+        let gax_response = super::to_http_response::<wkt::Empty>(response, None).await?;
+        assert!(response_internal::transport_span_info(&gax_response).is_none(), "TransportSpanInfo should not be present when span_info is None, got: {:?}", gax_response);
+        Ok(())
+    }
 }
+

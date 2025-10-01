@@ -19,6 +19,8 @@
 
 #[cfg(google_cloud_unstable_tracing)]
 pub mod attributes;
+#[cfg(google_cloud_unstable_tracing)]
+mod client_request;
 
 #[cfg(google_cloud_unstable_tracing)]
 mod errors;
@@ -28,3 +30,6 @@ mod http_tracing;
 
 #[cfg(google_cloud_unstable_tracing)]
 pub(crate) use http_tracing::{create_http_attempt_span, record_http_response_attributes};
+#[cfg(google_cloud_unstable_tracing)]
+#[allow(unused_imports)] // TODO: Remove when used
+pub(crate) use client_request::*;

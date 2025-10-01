@@ -314,6 +314,10 @@ pub mod internal {
         ///
         /// Examples: "404", "RATE_LIMIT_EXCEEDED", "CLIENT_TIMEOUT"
         pub error_type: Option<String>, // Derived from status or transport error
+        /// The OpenTelemetry status code for the operation.
+        ///
+        /// Examples: "Ok", "Error", "Unset"
+        pub otel_status: Option<String>,
 
         /// The destination host name or IP address.
         ///

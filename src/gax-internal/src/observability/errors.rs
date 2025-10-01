@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use gax::error::rpc::Code;
+use gax::error::Error;
 use http::StatusCode;
 
 use super::attributes::error_type_values::*;
@@ -29,6 +30,7 @@ pub enum ErrorType {
     ClientRequestBodyError,
     ClientResponseDecodeError,
     ClientRedirectError,
+    ResourceExhausted,
     Internal,
 }
 
@@ -91,6 +93,7 @@ impl ErrorType {
             ErrorType::ClientRequestBodyError => CLIENT_REQUEST_BODY_ERROR.to_string(),
             ErrorType::ClientResponseDecodeError => CLIENT_RESPONSE_DECODE_ERROR.to_string(),
             ErrorType::ClientRedirectError => CLIENT_REDIRECT_ERROR.to_string(),
+            ErrorType::ResourceExhausted => RESOURCE_EXHAUSTED.to_string(),
             ErrorType::Internal => INTERNAL.to_string(),
         }
     }
@@ -120,12 +123,43 @@ impl ErrorType {
             ErrorType::ClientRequestBodyError => Code::InvalidArgument,
             ErrorType::ClientResponseDecodeError => Code::Internal,
             ErrorType::ClientRedirectError => Code::Aborted,
+            ErrorType::ResourceExhausted => Code::ResourceExhausted,
             ErrorType::Internal => Code::Internal,
         }
     }
 
     pub(crate) fn grpc_status(&self) -> String {
         self.grpc_code().name().to_string()
+    }
+
+}
+
+impl From<&Error> for ErrorType {
+    fn from(err: &Error) -> Self {
+        if err.is_timeout() {
+            return ErrorType::ClientTimeout;
+        }
+        if err.is_exhausted() {
+            return ErrorType::ResourceExhausted;
+        }
+        if err.is_binding() || err.is_serialization() {
+            return ErrorType::ClientRequestError;
+        }
+        if err.is_deserialization() {
+            return ErrorType::ClientResponseDecodeError;
+        }
+        if err.is_authentication() {
+            return ErrorType::Internal; // Consider an Authentication specific type
+        }
+        if let Some(status) = err.http_status_code() {
+            return ErrorType::HttpError {
+                code: StatusCode::from_u16(status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+                reason: None };
+        }
+        if err.is_io() || err.is_transport() {
+            return ErrorType::ClientConnectionError;
+        }
+        ErrorType::Internal
     }
 }
 
