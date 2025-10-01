@@ -15,9 +15,13 @@
 #![allow(dead_code)] // TODO(#3239): Remove once used in http.rs
 
 use crate::options::InstrumentationClientInfo;
+use gax::error::Error;
 use gax::options::RequestOptions;
+use gax::response::internal::TransportSummary;
+use gax::response::{Response, internal as response_internal};
 use opentelemetry_semantic_conventions::{attribute as otel_attr, trace as otel_trace};
-use tracing::{Span, field};
+use std::any::Any;
+use tracing::{Level, Span, field};
 
 // OpenTelemetry Semantic Convention Keys
 // See https://opentelemetry.io/docs/specs/semconv/http/http-spans/
@@ -53,6 +57,8 @@ const KEY_GCP_CLIENT_REPO: &str = "gcp.client.repo";
 ///
 /// Example: google-cloud-storage
 const KEY_GCP_CLIENT_ARTIFACT: &str = "gcp.client.artifact";
+const GCP_CLIENT_LANGUAGE_RUST: &str = "rust";
+const ERROR_TYPE: &str = "error.type";
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum OtelStatus {
@@ -282,6 +288,66 @@ impl HttpSpanInfo {
         );
         span.record(otel_trace::ERROR_TYPE, self.error_type.as_deref());
     }
+}
+
+impl TransportSummary for HttpSpanInfo {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn clone_box(&self) -> Box<dyn TransportSummary> {
+        Box::new(self.clone())
+    }
+}
+
+// --- T3 Span Helpers ---
+
+/// Creates a Client Request Span (T3).
+pub fn create_client_request_span(
+    name: &'static str,
+    client_info: &'static InstrumentationClientInfo,
+) -> Span {
+    tracing::span!(
+        Level::INFO,
+        "client_request",
+        otel.name = name,
+        otel.kind = "Client",
+        gcp.client.service = client_info.service_name,
+        gcp.client.version = client_info.client_version,
+        gcp.client.artifact = client_info.client_artifact,
+        gcp.client.language = GCP_CLIENT_LANGUAGE_RUST,
+        gcp.client.repo = KEY_GCP_CLIENT_REPO,
+    )
+}
+
+/// Enriches the span with details from the response parts.
+pub fn enrich_client_request_span<T>(response: &Response<T>, span: &Span) {
+    if let Some(summary) = response_internal::get_transport_summary(response) {
+        if let Some(info) = summary.as_any().downcast_ref::<HttpSpanInfo>() {
+            span.in_scope(|| {
+                let current_span = Span::current();
+                current_span.record(otel_trace::RPC_SYSTEM, &"http");
+                current_span.record(otel_trace::HTTP_REQUEST_METHOD, &info.http_request_method);
+                if let Some(status) = info.http_response_status_code {
+                    current_span.record(otel_trace::HTTP_RESPONSE_STATUS_CODE, status);
+                }
+                if let Some(t) = &info.url_template {
+                    current_span.record(otel_attr::URL_TEMPLATE, t);
+                }
+                current_span.record(otel_trace::SERVER_ADDRESS, &info.server_address);
+                current_span.record(otel_trace::SERVER_PORT, info.server_port);
+                if let Some(e) = &info.error_type {
+                    current_span.record(ERROR_TYPE, e);
+                }
+            });
+        }
+    }
+}
+
+/// Enriches the span with details from an error.
+pub fn enrich_client_request_span_err(error: &Error, span: &Span) {
+    span.in_scope(|| {
+        Span::current().record(ERROR_TYPE, &error.to_string());
+    });
 }
 
 #[cfg(test)]

@@ -20,6 +20,8 @@ use gax::error::Error;
 use gax::exponential_backoff::ExponentialBackoff;
 use gax::polling_backoff_policy::PollingBackoffPolicy;
 use gax::polling_error_policy::{Aip194Strict as PollingAip194Strict, PollingErrorPolicy};
+#[cfg(feature = "_unstable-o12y")]
+use gax::response::internal::set_transport_summary;
 use gax::response::{Parts, Response};
 use gax::retry_policy::{Aip194Strict as RetryAip194Strict, RetryPolicy, RetryPolicyExt as _};
 use gax::retry_throttler::SharedRetryThrottler;
@@ -178,7 +180,7 @@ impl ReqwestClient {
         let request = builder.build().map_err(Self::map_send_error)?;
 
         #[cfg(feature = "_unstable-o12y")]
-        let response_result = if self._tracing_enabled {
+        if self._tracing_enabled {
             let mut span_info = crate::observability::HttpSpanInfo::from_request(
                 &request,
                 options,
@@ -186,24 +188,39 @@ impl ReqwestClient {
                 _attempt_count,
             );
             let span = span_info.create_span();
-            // The instrument call ensures the span is entered/exited as the execute future is polled.
             let result = self.inner.execute(request).instrument(span.clone()).await;
-            // Re-enter the span's context to record response attributes after the future has completed.
             let _enter = span.enter();
             span_info.update_from_response(&result);
             span_info.record_response_attributes(&span);
-            result
-        } else {
-            self.inner.execute(request).await
-        };
-        #[cfg(not(feature = "_unstable-o12y"))]
-        let response_result = self.inner.execute(request).await;
 
-        let response = response_result.map_err(Self::map_send_error)?;
-        if !response.status().is_success() {
-            return self::to_http_error(response).await;
+            let response = result.map_err(Self::map_send_error)?;
+            if !response.status().is_success() {
+                return self::to_http_error(response).await;
+            }
+            self::to_http_response(response, Some(span_info)).await
+        } else {
+            let response = self
+                .inner
+                .execute(request)
+                .await
+                .map_err(Self::map_send_error)?;
+            if !response.status().is_success() {
+                return self::to_http_error(response).await;
+            }
+            self::to_http_response(response, None).await
         }
-        self::to_http_response(response).await
+        #[cfg(not(feature = "_unstable-o12y"))]
+        {
+            let response = self
+                .inner
+                .execute(request)
+                .await
+                .map_err(Self::map_send_error)?;
+            if !response.status().is_success() {
+                return self::to_http_error(response).await;
+            }
+            self::to_http_response(response, None).await
+        }
     }
 
     fn map_send_error(err: reqwest::Error) -> Error {
@@ -300,6 +317,7 @@ pub async fn to_http_error<O>(response: reqwest::Response) -> Result<O> {
 
 async fn to_http_response<O: serde::de::DeserializeOwned + Default>(
     response: reqwest::Response,
+    span_info: Option<crate::observability::HttpSpanInfo>,
 ) -> Result<Response<O>> {
     // 204 No Content has no body and throws EOF error if we try to parse with serde::json
     let no_content_status = response.status() == reqwest::StatusCode::NO_CONTENT;
@@ -315,10 +333,15 @@ async fn to_http_response<O: serde::de::DeserializeOwned + Default>(
         content => serde_json::from_slice::<O>(&content).map_err(Error::deser)?,
     };
 
-    Ok(Response::from_parts(
-        Parts::new().set_headers(parts.headers),
-        response,
-    ))
+    let mut parts_out = Parts::default();
+    parts_out.headers = parts.headers;
+    let mut gax_response = Response::from_parts(parts_out, response);
+
+    #[cfg(feature = "_unstable-o12y")]
+    if let Some(info) = span_info {
+        set_transport_summary(&mut gax_response, Box::new(info));
+    }
+    Ok(gax_response)
 }
 
 #[cfg(test)]
@@ -398,7 +421,7 @@ mod tests {
         let response = resp_from_code_content(code, content)?;
         assert!(response.status().is_success());
 
-        let response = super::to_http_response::<wkt::Empty>(response).await;
+        let response = super::to_http_response::<wkt::Empty>(response, None).await;
         assert!(response.is_ok());
 
         let response = response.unwrap();
@@ -416,7 +439,7 @@ mod tests {
         let response = resp_from_code_content(code, content)?;
         assert!(response.status().is_success());
 
-        let response = super::to_http_response::<wkt::Empty>(response).await;
+        let response = super::to_http_response::<wkt::Empty>(response, None).await;
         assert!(response.is_err());
         Ok(())
     }
