@@ -250,7 +250,7 @@ impl HttpSpanInfo {
     /// Creates a new tracing span with attributes populated from the request.
     pub(crate) fn create_span(&self) -> Span {
         tracing::info_span!(
-            "http_request",
+            "http_request_attempt",
             { KEY_OTEL_NAME } = self.otel_name,
             { KEY_OTEL_KIND } = self.otel_kind,
             { otel_trace::RPC_SYSTEM } = self.rpc_system,
