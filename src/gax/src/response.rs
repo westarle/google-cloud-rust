@@ -62,6 +62,8 @@
 //! }
 //! ```
 
+use std::sync::{Arc, Mutex};
+
 /// Represents a Google Cloud service response.
 ///
 /// A response from a Google Cloud service consists of a body (potentially the
@@ -242,6 +244,8 @@ impl<T> Response<T> {
 pub struct Parts {
     /// The HTTP headers or the gRPC metadata converted to HTTP headers.
     pub headers: http::HeaderMap<http::HeaderValue>,
+    // Internal field for transport-specific observability data.
+    transport_summary: Arc<Mutex<Option<Box<dyn internal::TransportSummary>>>>,
 }
 
 impl Parts {
@@ -279,6 +283,54 @@ impl Parts {
     }
 }
 
+#[cfg_attr(not(feature = "_internal-semver"), doc(hidden))]
+pub mod internal {
+    //! This module contains implementation details. It is not part of the
+    //! public API. Types and functions in this module may be changed or removed
+    //! without warnings. Applications should not use any types contained
+    //! within.
+
+    use super::Response;
+    use std::any::Any;
+    use std::fmt::Debug;
+    /// Trait for transport-specific summaries to be passed from transport layers.
+    pub trait TransportSummary: Debug + Send + Sync + 'static {
+        /// Get the summary as a `dyn Any` to allow downcasting.
+        fn as_any(&self) -> &dyn Any;
+        /// Clone the boxed trait object.
+        fn clone_box(&self) -> Box<dyn TransportSummary>;
+    }
+
+    impl Clone for Box<dyn TransportSummary> {
+        fn clone(&self) -> Self {
+            self.clone_box()
+        }
+    }
+
+    /// Sets the transport summary for the response.
+    /// This is intended for internal use by transport layers.
+    pub fn set_transport_summary<T>(
+        response: &mut Response<T>,
+        summary: Box<dyn TransportSummary>,
+    ) {
+        let mut guard = response
+            .parts
+            .transport_summary
+            .lock()
+            .expect("Mutex poisoned");
+        *guard = Some(summary);
+    }
+    /// Gets the transport summary from the response.
+    /// This is intended for internal use by observability helpers.
+    pub fn get_transport_summary<T>(response: &Response<T>) -> Option<Box<dyn TransportSummary>> {
+        let guard = response
+            .parts
+            .transport_summary
+            .lock()
+            .expect("Mutex poisoned");
+        guard.clone()
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
