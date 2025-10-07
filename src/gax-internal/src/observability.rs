@@ -59,8 +59,10 @@ const KEY_GCP_CLIENT_REPO: &str = "gcp.client.repo";
 const KEY_GCP_CLIENT_ARTIFACT: &str = "gcp.client.artifact";
 const GCP_CLIENT_LANGUAGE_RUST: &str = "rust";
 const ERROR_TYPE: &str = "error.type";
+const GCP_CLIENT_REPO_URL: &str = "googleapis/google-cloud-rust";
 
 #[derive(Debug, Clone, PartialEq)]
+
 pub(crate) enum OtelStatus {
     Unset,
     Ok,
@@ -315,7 +317,14 @@ pub fn create_client_request_span(
         gcp.client.version = client_info.client_version,
         gcp.client.artifact = client_info.client_artifact,
         gcp.client.language = GCP_CLIENT_LANGUAGE_RUST,
-        gcp.client.repo = KEY_GCP_CLIENT_REPO,
+        gcp.client.repo = GCP_CLIENT_REPO_URL,
+        // Add other initially known attributes
+        otel.status_code = field::Empty,
+        otel.status_description = field::Empty,
+        http.request.method = field::Empty,
+        server.address = field::Empty,
+        server.port = field::Empty,
+        error.type = field::Empty,
     )
 }
 
@@ -323,31 +332,33 @@ pub fn create_client_request_span(
 pub fn enrich_client_request_span<T>(response: &Response<T>, span: &Span) {
     if let Some(summary) = response_internal::get_transport_summary(response) {
         if let Some(info) = summary.as_any().downcast_ref::<HttpSpanInfo>() {
-            span.in_scope(|| {
-                let current_span = Span::current();
-                current_span.record(otel_trace::RPC_SYSTEM, &"http");
-                current_span.record(otel_trace::HTTP_REQUEST_METHOD, &info.http_request_method);
-                if let Some(status) = info.http_response_status_code {
-                    current_span.record(otel_trace::HTTP_RESPONSE_STATUS_CODE, status);
+            span.record(otel_trace::HTTP_REQUEST_METHOD, &info.http_request_method);
+            if let Some(status) = info.http_response_status_code {
+                span.record(otel_trace::HTTP_RESPONSE_STATUS_CODE, status);
+                if status >= 400 {
+                    span.record(otel_attr::OTEL_STATUS_CODE, "ERROR");
+                    span.record(otel_attr::OTEL_STATUS_DESCRIPTION, info.error_type.as_deref().unwrap_or(""));
+                } else {
+                    span.record(otel_attr::OTEL_STATUS_CODE, "OK");
                 }
-                if let Some(t) = &info.url_template {
-                    current_span.record(otel_attr::URL_TEMPLATE, t);
-                }
-                current_span.record(otel_trace::SERVER_ADDRESS, &info.server_address);
-                current_span.record(otel_trace::SERVER_PORT, info.server_port);
-                if let Some(e) = &info.error_type {
-                    current_span.record(ERROR_TYPE, e);
-                }
-            });
+            }
+            if let Some(t) = &info.url_template {
+                span.record(otel_attr::URL_TEMPLATE, t);
+            }
+            span.record(otel_trace::SERVER_ADDRESS, &info.server_address);
+            span.record(otel_trace::SERVER_PORT, info.server_port);
+            if let Some(e) = &info.error_type {
+                span.record(ERROR_TYPE, e);
+            }
         }
     }
 }
 
 /// Enriches the span with details from an error.
 pub fn enrich_client_request_span_err(error: &Error, span: &Span) {
-    span.in_scope(|| {
-        Span::current().record(ERROR_TYPE, &error.to_string());
-    });
+    span.record(otel_attr::OTEL_STATUS_CODE, "ERROR");
+    span.record(otel_attr::OTEL_STATUS_DESCRIPTION, &error.to_string());
+    span.record(ERROR_TYPE, &error.to_string());
 }
 
 #[cfg(test)]

@@ -225,7 +225,7 @@ where
     fn on_new_span(&self, attrs: &span::Attributes<'_>, id: &span::Id, ctx: Context<'_, S>) {
         let mut span_map = HashMap::new();
         let mut visitor = TestVisitor(&mut span_map);
-        attrs.record(&mut visitor);
+        attrs.record(&mut visitor); // Record attributes from the macro
 
         let span_ref = ctx.span(id).expect("Span not found in registry");
         let name = span_ref.name().to_string();
@@ -240,7 +240,7 @@ where
         let captured_span = CapturedSpan {
             id: id.clone(),
             name,
-            attributes: span_map,
+            attributes: span_map, // Initial attributes
             test_id,
         };
         SPAN_LOG.push(captured_span);
