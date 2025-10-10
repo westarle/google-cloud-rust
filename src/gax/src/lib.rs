@@ -57,3 +57,23 @@ pub mod retry_loop_internal;
 
 #[cfg(test)]
 pub(crate) mod mock_rng;
+
+#[cfg(google_cloud_unstable_example_feature)]
+#[doc(hidden)]
+#[cfg_attr(docsrs, doc(cfg(google_cloud_unstable_example_feature)))]
+pub fn unstable_example_function() -> &'static str {
+    "This is an unstable example function."
+}
+
+#[cfg(all(test, google_cloud_unstable_example_feature))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_unstable_example_function() {
+        assert_eq!(
+            unstable_example_function(),
+            "This is an unstable example function."
+        );
+    }
+}

@@ -287,6 +287,9 @@ rust-version = "1.85.0"
 inherits    = "dev"
 incremental = false
 
+[workspace.lints.rust]
+unexpected_cfgs = { level = "deny", check-cfg = ['cfg(google_cloud_unstable_example_feature)'] }
+
 [workspace.dependencies]
 async-trait        = { default-features = false, version = "0.1" }
 base64             = { default-features = false, version = "0.22", features = ["std"] }

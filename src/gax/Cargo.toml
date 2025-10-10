@@ -68,3 +68,6 @@ unstable-stream = []
 # by this feature are intended for general use. We do not plan to document these
 # features and offer no guarantees on their stability.
 _internal-semver = []
+
+[lints]
+workspace = true
