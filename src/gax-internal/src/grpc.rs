@@ -43,6 +43,7 @@ pub struct Client {
     retry_throttler: SharedRetryThrottler,
     polling_error_policy: Arc<dyn PollingErrorPolicy>,
     polling_backoff_policy: Arc<dyn PollingBackoffPolicy>,
+    #[cfg(google_cloud_unstable_tracing)]
     instrumentation: Option<&'static crate::options::InstrumentationClientInfo>,
 }
 
@@ -75,16 +76,18 @@ impl Client {
             polling_backoff_policy: config
                 .polling_backoff_policy
                 .unwrap_or_else(|| Arc::new(ExponentialBackoff::default())),
+            #[cfg(google_cloud_unstable_tracing)]
             instrumentation: None,
         })
     }
 
     /// Sets the instrumentation client info.
+    #[cfg(google_cloud_unstable_tracing)]
     pub fn with_instrumentation(
         mut self,
-        instrumentation: Option<&'static crate::options::InstrumentationClientInfo>,
+        instrumentation: &'static crate::options::InstrumentationClientInfo,
     ) -> Self {
-        self.instrumentation = instrumentation;
+        self.instrumentation = Some(instrumentation);
         self
     }
 
@@ -317,22 +320,30 @@ where
 }
 
 #[cfg(test)]
+#[cfg(google_cloud_unstable_tracing)]
 mod tests {
-    use super::*;
+    use super::Client;
     use crate::options::InstrumentationClientInfo;
+    use lazy_static::lazy_static;
+
+    lazy_static! {
+        static ref TEST_INFO: InstrumentationClientInfo = {
+            let mut info = InstrumentationClientInfo::default();
+            info.service_name = "test-service";
+            info.client_version = "1.0.0";
+            info.client_artifact = "test-artifact";
+            info.default_host = "example.com";
+            info
+        };
+    }
 
     #[tokio::test]
     async fn test_with_instrumentation() {
         let config = crate::options::ClientConfig::default();
         let client = Client::new(config, "http://example.com").await.unwrap();
         assert!(client.instrumentation.is_none());
-        static TEST_INFO: InstrumentationClientInfo = InstrumentationClientInfo {
-            service_name: "test-service",
-            client_version: "1.0.0",
-            client_artifact: "test-artifact",
-            default_host: "example.com",
-        };
-        let client = client.with_instrumentation(Some(&TEST_INFO));
+
+        let client = client.with_instrumentation(&TEST_INFO);
         assert!(client.instrumentation.is_some());
         assert_eq!(client.instrumentation.unwrap().service_name, "test-service");
     }
