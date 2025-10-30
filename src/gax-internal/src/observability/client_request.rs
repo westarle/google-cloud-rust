@@ -24,7 +24,6 @@ use tracing::{Level, Span};
 // --- Client Request Span Helpers ---
 
 /// Creates a Client Request Span.
-#[allow(dead_code)]
 pub fn create_client_request_span(
     name: &'static str,
     client_info: &'static InstrumentationClientInfo,
@@ -56,7 +55,6 @@ pub fn create_client_request_span(
 }
 
 /// Enriches the span with details from the response parts.
-#[allow(dead_code)]
 pub fn enrich_client_request_span<T>(response: &Response<T>, span: &Span) {
 
     if let Some(info) = response_internal::transport_span_info(response) {
@@ -75,7 +73,6 @@ pub fn enrich_client_request_span<T>(response: &Response<T>, span: &Span) {
 }
 
 /// Enriches the span with details from an error.
-#[allow(dead_code)]
 pub fn enrich_client_request_span_err(error: &Error, span: &Span) {
     span.in_scope(|| {
         let current_span = Span::current();
