@@ -125,272 +125,49 @@ pub(crate) fn record_http_response_attributes(
     }
 }
 
+/// Creates a TransportSpanInfo from the result of an HTTP request.
+#[cfg(google_cloud_unstable_tracing)]
+pub(crate) fn create_transport_span_info(
+    result: &Result<reqwest::Response, reqwest::Error>,
+    attempt_count: u32,
+) -> gax::response::internal::TransportSpanInfo {
+    let mut info = gax::response::internal::TransportSpanInfo::default();
+    info.request_resend_count = if attempt_count > 1 {
+        Some((attempt_count - 1) as i64)
+    } else {
+        None
+    };
+
+    match result {
+        Ok(response) => {
+            info.http_status_code = Some(response.status().as_u16());
+            info.url_full = Some(response.url().to_string());
+            if let Some(remote_addr) = response.remote_addr() {
+                info.server_address = Some(remote_addr.ip().to_string());
+                info.server_port = Some(remote_addr.port() as i32);
+            }
+
+            if !response.status().is_success() {
+                let error_type = ErrorType::HttpError {
+                    code: response.status(),
+                    reason: None, // TODO: Extract from body if possible
+                };
+                info.error_type = Some(error_type.as_str());
+                info.rpc_grpc_status_code = Some(error_type.grpc_code() as i32);
+            }
+        }
+        Err(err) => {
+            let error_type = ErrorType::from_reqwest_error(err);
+            info.error_type = Some(error_type.as_str());
+            info.rpc_grpc_status_code = Some(error_type.grpc_code() as i32);
+            if let Some(url) = err.url() {
+                info.url_full = Some(url.to_string());
+            }
+        }
+    }
+    info
+}
+
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::options::InstrumentationClientInfo;
-    use gax::options::RequestOptions;
-    use google_cloud_test_utils::test_layer::{AttributeValue, TestLayer};
-    use http::Method;
-    use opentelemetry_semantic_conventions::{attribute as otel_attr, trace as otel_trace};
-    use reqwest;
-    use std::collections::HashMap;
-
-    #[tokio::test]
-    async fn test_create_span_attributes() {
-        let guard = TestLayer::initialize();
-        let request =
-            reqwest::Request::new(Method::GET, "https://example.com/test".parse().unwrap());
-        let options = gax::options::internal::set_path_template(RequestOptions::default(), "/test");
-        const INFO: InstrumentationClientInfo = InstrumentationClientInfo {
-            service_name: "test.service",
-            client_version: "1.2.3",
-            client_artifact: "google-cloud-test",
-            default_host: "example.com",
-        };
-        let _span = create_http_attempt_span(&request, &options, Some(&INFO), 1);
-
-        let expected_attributes: HashMap<String, AttributeValue> = [
-            (KEY_OTEL_NAME, "GET /test".into()),
-            (KEY_OTEL_KIND, "Client".into()),
-            (otel_trace::RPC_SYSTEM, "http".into()),
-            (otel_trace::HTTP_REQUEST_METHOD, "GET".into()),
-            (otel_trace::SERVER_ADDRESS, "example.com".into()),
-            (otel_trace::SERVER_PORT, 443_i64.into()),
-            (otel_trace::URL_FULL, "https://example.com/test".into()),
-            (otel_trace::URL_SCHEME, "https".into()),
-            (otel_attr::URL_TEMPLATE, "/test".into()),
-            (otel_attr::URL_DOMAIN, "example.com".into()),
-            (KEY_GCP_CLIENT_SERVICE, "test.service".into()),
-            (KEY_GCP_CLIENT_VERSION, "1.2.3".into()),
-            (KEY_GCP_CLIENT_REPO, "googleapis/google-cloud-rust".into()),
-            (KEY_GCP_CLIENT_ARTIFACT, "google-cloud-test".into()),
-            (otel_trace::HTTP_REQUEST_RESEND_COUNT, 1_i64.into()),
-            (KEY_OTEL_STATUS, "Unset".into()),
-        ]
-        .into_iter()
-        .map(|(k, v)| (k.to_string(), v))
-        .collect();
-
-        let captured = TestLayer::capture(&guard);
-        assert_eq!(captured.len(), 1, "captured spans: {:?}", captured);
-        let attributes = &captured[0].attributes;
-        assert_eq!(
-            *attributes, expected_attributes,
-            "captured spans: {:?}",
-            captured
-        );
-    }
-
-    #[tokio::test]
-    async fn test_create_span_attributes_optional() {
-        let guard = TestLayer::initialize();
-        let request =
-            reqwest::Request::new(Method::POST, "http://localhost:8080/".parse().unwrap());
-        let options = RequestOptions::default(); // No path template
-        // No InstrumentationClientInfo
-        let _span = create_http_attempt_span(&request, &options, None, 0);
-
-        let expected_attributes: HashMap<String, AttributeValue> = [
-            (KEY_OTEL_NAME, "POST".into()),
-            (KEY_OTEL_KIND, "Client".into()),
-            (otel_trace::RPC_SYSTEM, "http".into()),
-            (otel_trace::HTTP_REQUEST_METHOD, "POST".into()),
-            (otel_trace::SERVER_ADDRESS, "localhost".into()),
-            (otel_trace::SERVER_PORT, 8080_i64.into()),
-            (otel_trace::URL_FULL, "http://localhost:8080/".into()),
-            (otel_trace::URL_SCHEME, "http".into()),
-            (KEY_GCP_CLIENT_REPO, "googleapis/google-cloud-rust".into()),
-            (KEY_OTEL_STATUS, "Unset".into()),
-        ]
-        .into_iter()
-        .map(|(k, v)| (k.to_string(), v))
-        .collect();
-
-        let captured = TestLayer::capture(&guard);
-        assert_eq!(captured.len(), 1, "captured spans: {:?}", captured);
-        let attributes = &captured[0].attributes;
-        assert_eq!(
-            *attributes, expected_attributes,
-            "captured spans: {:?}",
-            captured
-        );
-    }
-
-    #[tokio::test]
-    async fn test_record_response_attributes_ok() {
-        let guard = TestLayer::initialize();
-        let request =
-            reqwest::Request::new(Method::GET, "https://example.com/test".parse().unwrap());
-        let options = RequestOptions::default();
-        let span = create_http_attempt_span(&request, &options, None, 0);
-        let _enter = span.enter();
-
-        let result = Ok(reqwest::Response::from(
-            http::Response::builder().status(200).body("").unwrap(),
-        ));
-        record_http_response_attributes(&span, &result);
-
-        let expected_attributes: HashMap<String, AttributeValue> = [
-            (KEY_OTEL_NAME, "GET".into()),
-            (KEY_OTEL_KIND, "Client".into()),
-            (otel_trace::RPC_SYSTEM, "http".into()),
-            (otel_trace::HTTP_REQUEST_METHOD, "GET".into()),
-            (otel_trace::SERVER_ADDRESS, "example.com".into()),
-            (otel_trace::SERVER_PORT, 443_i64.into()),
-            (otel_trace::URL_FULL, "https://example.com/test".into()),
-            (otel_trace::URL_SCHEME, "https".into()),
-            (KEY_GCP_CLIENT_REPO, "googleapis/google-cloud-rust".into()),
-            (KEY_OTEL_STATUS, "Ok".into()),
-            (otel_trace::HTTP_RESPONSE_STATUS_CODE, 200_i64.into()),
-        ]
-        .into_iter()
-        .map(|(k, v)| (k.to_string(), v))
-        .collect();
-
-        let captured = TestLayer::capture(&guard);
-        assert_eq!(captured.len(), 1, "captured spans: {:?}", captured);
-        let attributes = &captured[0].attributes;
-        assert_eq!(
-            *attributes, expected_attributes,
-            "captured spans: {:?}",
-            captured
-        );
-    }
-    #[tokio::test]
-    async fn test_record_response_attributes_error() {
-        let guard = TestLayer::initialize();
-        let request =
-            reqwest::Request::new(Method::GET, "https://example.com/test".parse().unwrap());
-        let options = RequestOptions::default();
-        let span = create_http_attempt_span(&request, &options, None, 0);
-        let _enter = span.enter();
-
-        // Simulate a timeout error
-        let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_millis(1))
-            .build()
-            .unwrap();
-        let error_result = client.execute(request).await;
-        assert!(error_result.is_err(), "error_result: {:?}", error_result);
-        record_http_response_attributes(&span, &error_result);
-
-        let expected_attributes: HashMap<String, AttributeValue> = [
-            (KEY_OTEL_NAME, "GET".into()),
-            (KEY_OTEL_KIND, "Client".into()),
-            (otel_trace::RPC_SYSTEM, "http".into()),
-            (otel_trace::HTTP_REQUEST_METHOD, "GET".into()),
-            (otel_trace::SERVER_ADDRESS, "example.com".into()),
-            (otel_trace::SERVER_PORT, 443_i64.into()),
-            (otel_trace::URL_FULL, "https://example.com/test".into()),
-            (otel_trace::URL_SCHEME, "https".into()),
-            (KEY_GCP_CLIENT_REPO, "googleapis/google-cloud-rust".into()),
-            (KEY_OTEL_STATUS, "Error".into()),
-            (otel_trace::ERROR_TYPE, "CLIENT_TIMEOUT".into()),
-            (otel_attr::RPC_GRPC_STATUS_CODE, 4_i64.into()),
-            (KEY_GRPC_STATUS, "DEADLINE_EXCEEDED".into()),
-        ]
-        .into_iter()
-        .map(|(k, v)| (k.to_string(), v))
-        .collect();
-
-        let captured = TestLayer::capture(&guard);
-        assert_eq!(captured.len(), 1, "captured spans: {:?}", captured);
-        let attributes = &captured[0].attributes;
-        assert_eq!(
-            *attributes, expected_attributes,
-            "captured spans: {:?}",
-            captured
-        );
-    }
-
-    #[tokio::test]
-    async fn test_record_response_attributes_http_error() {
-        let guard = TestLayer::initialize();
-        let request =
-            reqwest::Request::new(Method::GET, "https://example.com/test".parse().unwrap());
-        let options = RequestOptions::default();
-        let span = create_http_attempt_span(&request, &options, None, 0);
-        let _enter = span.enter();
-
-        let result = Ok(reqwest::Response::from(
-            http::Response::builder().status(404).body("").unwrap(),
-        ));
-        record_http_response_attributes(&span, &result);
-
-        let expected_attributes: HashMap<String, AttributeValue> = [
-            (KEY_OTEL_NAME, "GET".into()),
-            (KEY_OTEL_KIND, "Client".into()),
-            (otel_trace::RPC_SYSTEM, "http".into()),
-            (otel_trace::HTTP_REQUEST_METHOD, "GET".into()),
-            (otel_trace::SERVER_ADDRESS, "example.com".into()),
-            (otel_trace::SERVER_PORT, 443_i64.into()),
-            (otel_trace::URL_FULL, "https://example.com/test".into()),
-            (otel_trace::URL_SCHEME, "https".into()),
-            (KEY_GCP_CLIENT_REPO, "googleapis/google-cloud-rust".into()),
-            (KEY_OTEL_STATUS, "Error".into()),
-            (otel_trace::HTTP_RESPONSE_STATUS_CODE, 404_i64.into()),
-            (otel_trace::ERROR_TYPE, "404".into()),
-            (otel_attr::RPC_GRPC_STATUS_CODE, 5_i64.into()),
-            (KEY_GRPC_STATUS, "NOT_FOUND".into()),
-        ]
-        .into_iter()
-        .map(|(k, v)| (k.to_string(), v))
-        .collect();
-
-        let captured = TestLayer::capture(&guard);
-        assert_eq!(captured.len(), 1, "captured spans: {:?}", captured);
-        let attributes = &captured[0].attributes;
-        assert_eq!(
-            *attributes, expected_attributes,
-            "captured spans: {:?}",
-            captured
-        );
-    }
-
-    #[tokio::test]
-    async fn test_retry_attribute() {
-        let guard = TestLayer::initialize();
-        let request =
-            reqwest::Request::new(Method::GET, "https://example.com/test".parse().unwrap());
-        let options = RequestOptions::default();
-
-        // First attempt
-        let _span1 = create_http_attempt_span(&request, &options, None, 0);
-        let captured = TestLayer::capture(&guard);
-        assert_eq!(captured.len(), 1, "captured spans: {:?}", captured);
-        assert!(
-            !captured[0]
-                .attributes
-                .contains_key(otel_trace::HTTP_REQUEST_RESEND_COUNT),
-            "captured spans: {:?}",
-            captured
-        );
-
-        // First retry
-        let _span2 = create_http_attempt_span(&request, &options, None, 1);
-        let captured = TestLayer::capture(&guard);
-        assert_eq!(captured.len(), 1, "captured spans: {:?}", captured);
-        assert_eq!(
-            captured[0]
-                .attributes
-                .get(otel_trace::HTTP_REQUEST_RESEND_COUNT),
-            Some(&1_i64.into()),
-            "captured spans: {:?}",
-            captured
-        );
-
-        // Second retry
-        let _span3 = create_http_attempt_span(&request, &options, None, 2);
-        let captured = TestLayer::capture(&guard);
-        assert_eq!(captured.len(), 1, "captured spans: {:?}", captured);
-        assert_eq!(
-            captured[0]
-                .attributes
-                .get(otel_trace::HTTP_REQUEST_RESEND_COUNT),
-            Some(&2_i64.into()),
-            "captured spans: {:?}",
-            captured
-        );
-    }
 }

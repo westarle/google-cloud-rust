@@ -17,6 +17,7 @@ use gax::error::Error;
 use http::StatusCode;
 
 use super::attributes::error_type_values::*;
+use super::attributes::OtelStatus;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ErrorType {
@@ -90,13 +91,14 @@ impl ErrorType {
             ErrorType::ClientTimeout => CLIENT_TIMEOUT.to_string(),
             ErrorType::ClientConnectionError => CLIENT_CONNECTION_ERROR.to_string(),
             ErrorType::ClientRequestError => CLIENT_REQUEST_ERROR.to_string(),
-            ErrorType::ClientRequestBodyError => CLIENT_REQUEST_BODY_ERROR.to_string(),
-            ErrorType::ClientResponseDecodeError => CLIENT_RESPONSE_DECODE_ERROR.to_string(),
-            ErrorType::ClientRedirectError => CLIENT_REDIRECT_ERROR.to_string(),
-            ErrorType::ResourceExhausted => RESOURCE_EXHAUSTED.to_string(),
-            ErrorType::Internal => INTERNAL.to_string(),
-        }
-    }
+                                    ErrorType::ClientRequestBodyError => CLIENT_REQUEST_BODY_ERROR.to_string(),
+                                    ErrorType::ClientResponseDecodeError => CLIENT_RESPONSE_DECODE_ERROR.to_string(),
+                                    ErrorType::ClientRedirectError => CLIENT_REDIRECT_ERROR.to_string(),
+                                    ErrorType::ResourceExhausted => RESOURCE_EXHAUSTED.to_string(),
+                                    ErrorType::Internal => INTERNAL.to_string(),
+                                }
+                            }
+                        
 
     pub(crate) fn grpc_code(&self) -> Code {
         match self {
@@ -132,6 +134,12 @@ impl ErrorType {
         self.grpc_code().name().to_string()
     }
 
+    pub(crate) fn otel_status(&self) -> OtelStatus {
+        match self {
+            ErrorType::HttpError { code, .. } if code.is_success() => OtelStatus::Ok,
+            _ => OtelStatus::Error,
+        }
+    }
 }
 
 impl From<&Error> for ErrorType {

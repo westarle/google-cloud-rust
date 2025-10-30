@@ -76,6 +76,8 @@ pub mod error_type_values {
     pub const CLIENT_RESPONSE_DECODE_ERROR: &str = "CLIENT_RESPONSE_DECODE_ERROR";
     /// Problem handling HTTP redirects.
     pub const CLIENT_REDIRECT_ERROR: &str = "CLIENT_REDIRECT_ERROR";
+    /// Resource exhausted error.
+    pub const RESOURCE_EXHAUSTED: &str = "RESOURCE_EXHAUSTED";
     /// Unexpected issue within the client library's own logic.
     pub const INTERNAL: &str = "INTERNAL";
 }

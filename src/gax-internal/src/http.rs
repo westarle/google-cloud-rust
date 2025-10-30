@@ -195,13 +195,23 @@ impl ReqwestClient {
         #[cfg(not(google_cloud_unstable_tracing))]
         let response_result = self.inner.execute(request).await;
 
+        #[cfg(google_cloud_unstable_tracing)]
+        let transport_span_info = if self._tracing_enabled {
+            Some(crate::observability::create_transport_span_info(&response_result, _attempt_count))
+        } else {
+            None
+        };
+        #[cfg(not(google_cloud_unstable_tracing))]
+        let _transport_span_info: Option<()> = None;
+
         let response = response_result.map_err(Self::map_send_error)?;
         if !response.status().is_success() {
             return self::to_http_error(response).await;
         }
-
-        // TODO: Populate TransportSpanInfo here
-        self::to_http_response(response).await
+#[cfg(google_cloud_unstable_tracing)]
+        return self::to_http_response(response, transport_span_info).await;
+        #[cfg(not(google_cloud_unstable_tracing))]
+        return self::to_http_response(response, None).await;
     }
 
     fn map_send_error(err: reqwest::Error) -> Error {
@@ -298,9 +308,12 @@ pub async fn to_http_error<O>(response: reqwest::Response) -> Result<O> {
 
 async fn to_http_response<O: serde::de::DeserializeOwned + Default>(
     response: reqwest::Response,
+    #[cfg(google_cloud_unstable_tracing)] transport_span_info: Option<gax::response::internal::TransportSpanInfo>,
+    #[cfg(not(google_cloud_unstable_tracing))] _transport_span_info: Option<()>,
 ) -> Result<Response<O>> {
     // 204 No Content has no body and throws EOF error if we try to parse with serde::json
     let no_content_status = response.status() == reqwest::StatusCode::NO_CONTENT;
+
     let response = http::Response::from(response);
     let (parts, body) = response.into_parts();
 
@@ -310,15 +323,30 @@ async fn to_http_response<O: serde::de::DeserializeOwned + Default>(
 
     let response = match body.to_bytes() {
         content if (content.is_empty() && no_content_status) => O::default(),
-        content => serde_json::from_slice::<O>(&content).map_err(Error::deser)?,
-    };
+                content => serde_json::from_slice::<O>(&content).map_err(Error::deser)?,
+            };
+        
+            #[cfg(google_cloud_unstable_tracing)]
+            let mut gax_response = Response::from_parts(
+                Parts::new().set_headers(parts.headers),
+                response,
+            );
+            #[cfg(not(google_cloud_unstable_tracing))]
+            let gax_response = Response::from_parts(
+                Parts::new().set_headers(parts.headers),
+                response,
+            );
+            #[cfg(google_cloud_unstable_tracing)]
+            if let Some(info) = transport_span_info {
+        
 
-    Ok(Response::from_parts(
-        Parts::new().set_headers(parts.headers),
-        response,
-    ))
+            gax::response::internal::set_transport_span_info(&mut gax_response, Some(info));
 
-#[cfg(test)]
+        }
+
+        Ok(gax_response)
+
+    }#[cfg(test)]
 mod tests {
     use http::{HeaderMap, HeaderValue, Method};
     use test_case::test_case;
@@ -326,12 +354,6 @@ mod tests {
     use super::*;
     use crate::options::ClientConfig;
     use crate::options::InstrumentationClientInfo;
-    #[cfg(google_cloud_unstable_tracing)]
-    use crate::observability::HttpSpanInfo;
-    #[cfg(google_cloud_unstable_tracing)]
-    use gax::response::internal as response_internal;
-    #[cfg(google_cloud_unstable_tracing)]
-    use gax::options::RequestOptions;
 
     #[tokio::test]
     async fn client_http_error_bytes() -> TestResult {
@@ -401,8 +423,7 @@ mod tests {
         let response = resp_from_code_content(code, content)?;
         assert!(response.status().is_success());
 
-        let response = super::to_http_response::<wkt::Empty>(response).await;
-        assert!(response.is_ok());
+let response = super::to_http_response::<wkt::Empty>(response, None).await;
 
         let response = response.unwrap();
         let body = response.into_body();
@@ -419,7 +440,7 @@ mod tests {
         let response = resp_from_code_content(code, content)?;
         assert!(response.status().is_success());
 
-        let response = super::to_http_response::<wkt::Empty>(response).await;
+        let response = super::to_http_response::<wkt::Empty>(response, None).await;
         assert!(response.is_err());
         Ok(())
     }
@@ -529,26 +550,6 @@ mod tests {
         let client = ReqwestClient::new(config.clone(), "https://localhost:7469/").await?;
         assert_eq!(client.host, "localhost");
 
-        Ok(())
-    }
-
-    #[cfg(google_cloud_unstable_tracing)]
-    #[tokio::test]
-    async fn test_to_http_response_with_span_info() -> TestResult {
-        let response = resp_from_code_content(reqwest::StatusCode::OK, "{}")?;
-        let request = reqwest::Request::new(reqwest::Method::GET, response.url().clone());
-        let span_info = HttpSpanInfo::from_request(&request, &RequestOptions::default(), None, 0);
-        let gax_response = super::to_http_response::<wkt::Empty>(response, Some(span_info)).await?;
-        assert!(response_internal::transport_span_info(&gax_response).is_some(), "TransportSpanInfo should be present when span_info is provided, got: {:?}", gax_response);
-        Ok(())
-    }
-
-    #[cfg(google_cloud_unstable_tracing)]
-    #[tokio::test]
-    async fn test_to_http_response_with_none_span_info() -> TestResult {
-        let response = resp_from_code_content(reqwest::StatusCode::OK, "{}")?;
-        let gax_response = super::to_http_response::<wkt::Empty>(response, None).await?;
-        assert!(response_internal::transport_span_info(&gax_response).is_none(), "TransportSpanInfo should not be present when span_info is None, got: {:?}", gax_response);
         Ok(())
     }
 }

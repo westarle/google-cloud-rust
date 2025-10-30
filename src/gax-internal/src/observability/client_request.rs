@@ -24,6 +24,7 @@ use tracing::{Level, Span};
 // --- Client Request Span Helpers ---
 
 /// Creates a Client Request Span.
+#[allow(dead_code)]
 pub fn create_client_request_span(
     name: &'static str,
     client_info: &'static InstrumentationClientInfo,
@@ -55,12 +56,13 @@ pub fn create_client_request_span(
 }
 
 /// Enriches the span with details from the response parts.
+#[allow(dead_code)]
 pub fn enrich_client_request_span<T>(response: &Response<T>, span: &Span) {
 
     if let Some(info) = response_internal::transport_span_info(response) {
         span.in_scope(|| {
             let current_span = Span::current();
-            current_span.record(otel_trace::HTTP_RESPONSE_STATUS_CODE, info.http_status_code);
+            current_span.record(otel_trace::HTTP_RESPONSE_STATUS_CODE, info.http_status_code.map(|v| v as i64));
             current_span.record(otel_attr::RPC_GRPC_STATUS_CODE, info.rpc_grpc_status_code);
             current_span.record(otel_trace::ERROR_TYPE, info.error_type.as_deref());
             current_span.record(KEY_OTEL_STATUS, info.otel_status.as_deref());
@@ -73,6 +75,7 @@ pub fn enrich_client_request_span<T>(response: &Response<T>, span: &Span) {
 }
 
 /// Enriches the span with details from an error.
+#[allow(dead_code)]
 pub fn enrich_client_request_span_err(error: &Error, span: &Span) {
     span.in_scope(|| {
         let current_span = Span::current();
@@ -88,8 +91,9 @@ mod tests {
     use crate::options::InstrumentationClientInfo;
     use gax::options::RequestOptions;
     use gax::response::internal::{set_transport_span_info, TransportSpanInfo};
-    use google_cloud_test_utils::test_layer::TestLayer;
+    use google_cloud_test_utils::test_layer::{AttributeValue, TestLayer};
     use std::collections::HashMap;
+    use crate::observability::attributes::OtelStatus;
 
     const INFO: InstrumentationClientInfo = InstrumentationClientInfo {
         service_name: "test.service",
@@ -109,14 +113,14 @@ mod tests {
         let event = &captured[0];
         assert_eq!(event.name, "client_request");
 
-        let expected_attributes: HashMap<String, String> = [
-            ("otel.name".to_string(), "test.method".to_string()),
-            ("otel.kind".to_string(), "Internal".to_string()),
-            ("gcp.client.service".to_string(), "test.service".to_string()),
-            ("gcp.client.version".to_string(), "1.2.3".to_string()),
-            ("gcp.client.artifact".to_string(), "google-cloud-test".to_string()),
-            ("gcp.client.language".to_string(), "rust".to_string()),
-            ("gcp.client.repo".to_string(), "googleapis/google-cloud-rust".to_string()),
+        let expected_attributes: HashMap<String, AttributeValue> = [
+            ("otel.name".to_string(), "test.method".into()),
+            ("otel.kind".to_string(), "Internal".into()),
+            ("gcp.client.service".to_string(), "test.service".into()),
+            ("gcp.client.version".to_string(), "1.2.3".into()),
+            ("gcp.client.artifact".to_string(), "google-cloud-test".into()),
+            ("gcp.client.language".to_string(), "rust".into()),
+            ("gcp.client.repo".to_string(), "googleapis/google-cloud-rust".into()),
         ]
         .into_iter()
         .collect();
@@ -149,22 +153,22 @@ mod tests {
         assert_eq!(captured.len(), 1);
         let event = &captured[0];
 
-        let expected_attributes: HashMap<String, String> = [
-            ("otel.name".to_string(), "test.method".to_string()),
-            ("otel.kind".to_string(), "Internal".to_string()),
-            ("gcp.client.service".to_string(), "test.service".to_string()),
-            ("gcp.client.version".to_string(), "1.2.3".to_string()),
-            ("gcp.client.artifact".to_string(), "google-cloud-test".to_string()),
-            ("gcp.client.language".to_string(), "rust".to_string()),
-            ("gcp.client.repo".to_string(), "googleapis/google-cloud-rust".to_string()),
+        let expected_attributes: HashMap<String, AttributeValue> = [
+            ("otel.name".to_string(), "test.method".into()),
+            ("otel.kind".to_string(), "Internal".into()),
+            ("gcp.client.service".to_string(), "test.service".into()),
+            ("gcp.client.version".to_string(), "1.2.3".into()),
+            ("gcp.client.artifact".to_string(), "google-cloud-test".into()),
+            ("gcp.client.language".to_string(), "rust".into()),
+            ("gcp.client.repo".to_string(), "googleapis/google-cloud-rust".into()),
             // Enriched attributes
-            ("http.response.status_code".to_string(), "200".to_string()),
-            ("rpc.grpc.status_code".to_string(), "0".to_string()),
-            ("server.address".to_string(), "1.2.3.4".to_string()),
-            ("server.port".to_string(), "443".to_string()),
-            ("url.full".to_string(), "https://example.com/test".to_string()),
-            ("http.request.resend_count".to_string(), "1".to_string()),
-            ("otel.status".to_string(), "Ok".to_string()),
+            ("http.response.status_code".to_string(), 200i64.into()),
+            ("rpc.grpc.status_code".to_string(), 0i64.into()),
+            ("server.address".to_string(), "1.2.3.4".into()),
+            ("server.port".to_string(), 443i64.into()),
+            ("url.full".to_string(), "https://example.com/test".into()),
+            ("http.request.resend_count".to_string(), 1i64.into()),
+            ("otel.status".to_string(), "Ok".into()),
         ]
         .into_iter()
         .collect();
@@ -185,17 +189,17 @@ mod tests {
         assert_eq!(captured.len(), 1);
         let event = &captured[0];
 
-        let expected_attributes: HashMap<String, String> = [
-            ("otel.name".to_string(), "test.method".to_string()),
-            ("otel.kind".to_string(), "Internal".to_string()),
-            ("gcp.client.service".to_string(), "test.service".to_string()),
-            ("gcp.client.version".to_string(), "1.2.3".to_string()),
-            ("gcp.client.artifact".to_string(), "google-cloud-test".to_string()),
-            ("gcp.client.language".to_string(), "rust".to_string()),
-            ("gcp.client.repo".to_string(), "googleapis/google-cloud-rust".to_string()),
+        let expected_attributes: HashMap<String, AttributeValue> = [
+            ("otel.name".to_string(), "test.method".into()),
+            ("otel.kind".to_string(), "Internal".into()),
+            ("gcp.client.service".to_string(), "test.service".into()),
+            ("gcp.client.version".to_string(), "1.2.3".into()),
+            ("gcp.client.artifact".to_string(), "google-cloud-test".into()),
+            ("gcp.client.language".to_string(), "rust".into()),
+            ("gcp.client.repo".to_string(), "googleapis/google-cloud-rust".into()),
             // Enriched attributes
-            ("error.type".to_string(), "CLIENT_CONNECTION_ERROR".to_string()),
-            ("otel.status".to_string(), "Error".to_string()),
+            ("error.type".to_string(), "CLIENT_CONNECTION_ERROR".into()),
+            ("otel.status".to_string(), "Error".into()),
         ]
         .into_iter()
         .collect();
