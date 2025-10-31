@@ -74,6 +74,8 @@ pub(crate) fn create_http_attempt_span(
         { KEY_GCP_CLIENT_REPO } = "googleapis/google-cloud-rust",
         { KEY_GCP_CLIENT_ARTIFACT } = gcp_client_artifact,
         { otel_trace::HTTP_REQUEST_RESEND_COUNT } = http_request_resend_count,
+        { otel_attr::NETWORK_PROTOCOL_NAME } = "http",
+        { otel_attr::NETWORK_PROTOCOL_VERSION } = format!("{:?}", request.version()),
         // Fields to be recorded later
         { KEY_OTEL_STATUS } = OtelStatus::Unset.as_str(), // Initial state
         { otel_trace::HTTP_RESPONSE_STATUS_CODE } = field::Empty,
@@ -168,6 +170,11 @@ mod tests {
             (KEY_GCP_CLIENT_ARTIFACT, "google-cloud-test".into()),
             (otel_trace::HTTP_REQUEST_RESEND_COUNT, 1_i64.into()),
             (KEY_OTEL_STATUS, "Unset".into()),
+            (otel_attr::NETWORK_PROTOCOL_NAME, "http".into()),
+            (
+                otel_attr::NETWORK_PROTOCOL_VERSION,
+                format!("{:?}", request.version()).into(),
+            ),
         ]
         .into_iter()
         .map(|(k, v)| (k.to_string(), v))
@@ -176,11 +183,7 @@ mod tests {
         let captured = TestLayer::capture(&guard);
         assert_eq!(captured.len(), 1, "captured spans: {:?}", captured);
         let attributes = &captured[0].attributes;
-        assert_eq!(
-            *attributes, expected_attributes,
-            "captured spans: {:?}",
-            captured
-        );
+        assert_eq!(*attributes, expected_attributes);
     }
 
     #[tokio::test]
@@ -203,6 +206,11 @@ mod tests {
             (otel_trace::URL_SCHEME, "http".into()),
             (KEY_GCP_CLIENT_REPO, "googleapis/google-cloud-rust".into()),
             (KEY_OTEL_STATUS, "Unset".into()),
+            (otel_attr::NETWORK_PROTOCOL_NAME, "http".into()),
+            (
+                otel_attr::NETWORK_PROTOCOL_VERSION,
+                format!("{:?}", request.version()).into(),
+            ),
         ]
         .into_iter()
         .map(|(k, v)| (k.to_string(), v))
@@ -211,11 +219,7 @@ mod tests {
         let captured = TestLayer::capture(&guard);
         assert_eq!(captured.len(), 1, "captured spans: {:?}", captured);
         let attributes = &captured[0].attributes;
-        assert_eq!(
-            *attributes, expected_attributes,
-            "captured spans: {:?}",
-            captured
-        );
+        assert_eq!(*attributes, expected_attributes);
     }
 
     #[test_case(StatusCode::OK; "OK")]
@@ -252,6 +256,11 @@ mod tests {
                 otel_trace::HTTP_RESPONSE_STATUS_CODE,
                 (status_code.as_u16() as i64).into(),
             ),
+            (otel_attr::NETWORK_PROTOCOL_NAME, "http".into()),
+            (
+                otel_attr::NETWORK_PROTOCOL_VERSION,
+                format!("{:?}", request.version()).into(),
+            ),
         ]
         .into_iter()
         .map(|(k, v)| (k.to_string(), v))
@@ -260,11 +269,7 @@ mod tests {
         let captured = TestLayer::capture(&guard);
         assert_eq!(captured.len(), 1, "captured spans: {:?}", captured);
         let attributes = &captured[0].attributes;
-        assert_eq!(
-            *attributes, expected_attributes,
-            "captured spans: {:?}",
-            captured
-        );
+        assert_eq!(*attributes, expected_attributes);
     }
 
     #[tokio::test]
@@ -272,6 +277,7 @@ mod tests {
         let guard = TestLayer::initialize();
         let request =
             reqwest::Request::new(Method::GET, "https://example.com/test".parse().unwrap());
+        let request_version = request.version();
         let options = RequestOptions::default();
         let span = create_http_attempt_span(&request, &options, None, 0);
         let _enter = span.enter();
@@ -297,6 +303,11 @@ mod tests {
             (KEY_GCP_CLIENT_REPO, "googleapis/google-cloud-rust".into()),
             (KEY_OTEL_STATUS, "Error".into()),
             (otel_trace::ERROR_TYPE, "CLIENT_TIMEOUT".into()),
+            (otel_attr::NETWORK_PROTOCOL_NAME, "http".into()),
+            (
+                otel_attr::NETWORK_PROTOCOL_VERSION,
+                format!("{:?}", request_version).into(),
+            ),
         ]
         .into_iter()
         .map(|(k, v)| (k.to_string(), v))
@@ -305,11 +316,7 @@ mod tests {
         let captured = TestLayer::capture(&guard);
         assert_eq!(captured.len(), 1, "captured spans: {:?}", captured);
         let attributes = &captured[0].attributes;
-        assert_eq!(
-            *attributes, expected_attributes,
-            "captured spans: {:?}",
-            captured
-        );
+        assert_eq!(*attributes, expected_attributes);
     }
 
     #[test_case(StatusCode::BAD_REQUEST, "400"; "Bad Request")]
@@ -354,6 +361,11 @@ mod tests {
                 (status_code.as_u16() as i64).into(),
             ),
             (otel_trace::ERROR_TYPE, expected_error_type.into()),
+            (otel_attr::NETWORK_PROTOCOL_NAME, "http".into()),
+            (
+                otel_attr::NETWORK_PROTOCOL_VERSION,
+                format!("{:?}", request.version()).into(),
+            ),
         ]
         .into_iter()
         .map(|(k, v)| (k.to_string(), v))
@@ -362,11 +374,7 @@ mod tests {
         let captured = TestLayer::capture(&guard);
         assert_eq!(captured.len(), 1, "captured spans: {:?}", captured);
         let attributes = &captured[0].attributes;
-        assert_eq!(
-            *attributes, expected_attributes,
-            "captured spans: {:?}",
-            captured
-        );
+        assert_eq!(*attributes, expected_attributes);
     }
 
     #[tokio::test]

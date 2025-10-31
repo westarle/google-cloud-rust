@@ -20,7 +20,7 @@ mod tests {
     use google_cloud_gax_internal::observability::attributes::*;
     use google_cloud_gax_internal::options::{ClientConfig, InstrumentationClientInfo};
     use google_cloud_test_utils::test_layer::{AttributeValue, TestLayer};
-    use http::{Method, StatusCode};
+    use http::{Method, StatusCode, Version};
     use httptest::matchers::request::{method, path};
     use httptest::{Expectation, Server, all_of, responders::*};
     use opentelemetry_semantic_conventions::{attribute as otel_attr, trace as otel_trace};
@@ -81,12 +81,12 @@ mod tests {
             client.execute(request, None::<NoBody>, options).await;
 
         let captured = TestLayer::capture(&guard);
-        assert_eq!(captured.len(), 1, "Should capture one span");
+        assert_eq!(captured.len(), 1, "Should capture one span: {:?}", captured);
 
         let span = &captured[0];
         let attrs = &span.attributes;
 
-        let mut expected_attributes: HashMap<String, AttributeValue> = [
+        let expected_attributes: HashMap<String, AttributeValue> = [
             (KEY_OTEL_NAME, "GET /test".into()),
             (KEY_OTEL_KIND, "Client".into()),
             (otel_trace::RPC_SYSTEM, "http".into()),
@@ -101,29 +101,17 @@ mod tests {
             (KEY_GCP_CLIENT_REPO, "googleapis/google-cloud-rust".into()),
             (KEY_GCP_CLIENT_ARTIFACT, TEST_ARTIFACT.into()),
             (otel_trace::HTTP_RESPONSE_BODY_SIZE, 18_i64.into()), // {"hello": "world"} is 18 bytes
+            (otel_trace::SERVER_ADDRESS, server_addr.ip().to_string().into()),
+            (otel_trace::SERVER_PORT, (server_addr.port() as i64).into()),
+            (otel_trace::URL_FULL, format!("{}/test", server_url).into()),
+            (otel_attr::NETWORK_PROTOCOL_NAME, "http".into()),
+            (otel_attr::NETWORK_PROTOCOL_VERSION, format!("{:?}", Version::HTTP_11).into()),
         ]
         .into_iter()
         .map(|(k, v)| (k.to_string(), v))
         .collect();
 
-        expected_attributes.insert(
-            otel_trace::SERVER_ADDRESS.to_string(),
-            server_addr.ip().to_string().into(),
-        );
-        expected_attributes.insert(
-            otel_trace::SERVER_PORT.to_string(),
-            (server_addr.port() as i64).into(),
-        );
-        expected_attributes.insert(
-            otel_trace::URL_FULL.to_string(),
-            format!("{}/test", server_url).into(),
-        );
-
-        assert_eq!(
-            attrs, &expected_attributes,
-            "Attribute mismatch: {:?}",
-            captured
-        );
+        assert_eq!(attrs, &expected_attributes);
     }
 
     #[tokio::test]
@@ -143,7 +131,7 @@ mod tests {
             .await;
 
         let captured = TestLayer::capture(&guard);
-        assert_eq!(captured.len(), 0, "Should capture no spans: {captured:?}");
+        assert_eq!(captured.len(), 0, "Should capture no spans: {:?}", captured);
     }
 
     #[test_case(StatusCode::BAD_REQUEST, "400"; "400 Bad Request")]
@@ -172,7 +160,7 @@ mod tests {
             client.execute(request, None::<NoBody>, options).await;
 
         let captured = TestLayer::capture(&guard);
-        assert_eq!(captured.len(), 1, "Should capture one span");
+        assert_eq!(captured.len(), 1, "Should capture one span: {:?}", captured);
 
         let span = &captured[0];
 
