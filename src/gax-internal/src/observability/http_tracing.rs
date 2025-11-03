@@ -359,6 +359,53 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_record_response_attributes_error_info() {
+        let guard = TestLayer::initialize();
+        let request =
+            reqwest::Request::new(Method::GET, "https://example.com/test".parse().unwrap());
+        let options = RequestOptions::default();
+        let span = create_http_attempt_span(&request, &options, None, 0);
+        let _enter = span.enter();
+
+        let error_info = rpc::model::ErrorInfo::default()
+            .set_reason("API_KEY_INVALID")
+            .set_domain("googleapis.com");
+        let status = gax::error::rpc::Status::default()
+            .set_code(gax::error::rpc::Code::InvalidArgument)
+            .set_message("Invalid API Key")
+            .set_details(vec![gax::error::rpc::StatusDetails::ErrorInfo(error_info)]);
+        let error = gax::error::Error::service(status);
+
+        record_http_response_attributes(&span, Err(&error));
+
+        let expected_attributes: HashMap<String, AttributeValue> = [
+            (KEY_OTEL_NAME, "GET".into()),
+            (KEY_OTEL_KIND, "Client".into()),
+            (otel_trace::RPC_SYSTEM, "http".into()),
+            (otel_trace::HTTP_REQUEST_METHOD, "GET".into()),
+            (otel_trace::SERVER_ADDRESS, "example.com".into()),
+            (otel_trace::SERVER_PORT, 443_i64.into()),
+            (otel_trace::URL_FULL, "https://example.com/test".into()),
+            (otel_trace::URL_SCHEME, "https".into()),
+            (KEY_GCP_CLIENT_REPO, "googleapis/google-cloud-rust".into()),
+            (KEY_OTEL_STATUS, "Error".into()),
+            (otel_trace::ERROR_TYPE, "API_KEY_INVALID".into()),
+        ]
+        .into_iter()
+        .map(|(k, v)| (k.to_string(), v))
+        .collect();
+
+        let captured = TestLayer::capture(&guard);
+        assert_eq!(captured.len(), 1, "captured spans: {:?}", captured);
+        let attributes = &captured[0].attributes;
+        assert_eq!(
+            *attributes, expected_attributes,
+            "captured spans: {:?}",
+            captured
+        );
+    }
+
+    #[tokio::test]
     async fn test_retry_attribute() {
         let guard = TestLayer::initialize();
         let request =
