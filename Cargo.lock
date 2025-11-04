@@ -5399,6 +5399,7 @@ dependencies = [
  "google-cloud-wkt",
  "google-cloud-workflows-executions-v1",
  "google-cloud-workflows-v1",
+ "http",
  "httptest",
  "mockall",
  "opentelemetry",

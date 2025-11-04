@@ -80,44 +80,65 @@ mod observability {
         let exporter = opentelemetry_otlp::SpanExporter::builder()
             .with_tonic()
             .with_endpoint("https://telemetry.googleapis.com:443")
+            .with_tls_config(
+                tonic::transport::ClientTlsConfig::new()
+                    .with_enabled_roots()
+                    .domain_name("telemetry.googleapis.com"),
+            )
             .with_interceptor(interceptor)
             .build()?;
 
         // 3. Configure Tracer Provider
+        let resource = opentelemetry_sdk::Resource::builder_empty()
+            .with_attributes(vec![
+                opentelemetry::KeyValue::new("gcp.project_id", project_id.clone()),
+                opentelemetry::KeyValue::new("service.name", "e2e-test"),
+            ])
+            .build();
+
         let tracer_provider = SdkTracerProvider::builder()
+            .with_resource(resource)
             .with_batch_exporter(exporter)
             .build();
 
         // 4. Install Global Subscriber
         let tracer = tracer_provider.tracer("e2e-test");
         let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
-        let subscriber = Registry::default().with(telemetry);
+        let subscriber = Registry::default()
+            .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))
+            .with(telemetry);
 
-        let trace_id_hex = tracing::subscriber::with_default(subscriber, || async {
-            // 5. Generate Spans
-            let root_span = tracing::info_span!("e2e_test_root");
-            let trace_id = root_span.context().span().span_context().trace_id().to_string();
+        tracing::subscriber::set_global_default(subscriber)
+            .expect("failed to set global subscriber");
+
+        // 5. Generate Spans
+        let root_span = tracing::info_span!("e2e_test_root");
+        let trace_id_hex = async {
+            let trace_id = tracing::Span::current()
+                .context()
+                .span()
+                .span_context()
+                .trace_id()
+                .to_string();
             tracing::info!("Generated Trace ID: {}", trace_id);
 
-            async {
-                tracing::info!("starting e2e test");
-                // Make a real API call to generate library spans
-                let client = sm::client::SecretManagerService::builder()
-                    .build()
-                    .await
-                    .map_err(|e| anyhow::anyhow!("failed to create client: {:?}", e))?;
+            tracing::info!("starting e2e test");
+            // Make a real API call to generate library spans
+            let client = sm::client::SecretManagerService::builder()
+                .with_tracing()
+                .build()
+                .await
+                .map_err(|e| anyhow::anyhow!("failed to create client: {:?}", e))?;
 
-                let _ = client
-                    .list_secrets()
-                    .set_parent(format!("projects/{}", project_id))
-                    .send()
-                    .await;
-                tracing::info!("finished e2e test");
-                Ok::<String, anyhow::Error>(trace_id)
-            }
-            .instrument(root_span)
-            .await
-        })
+            let _ = client
+                .list_secrets()
+                .set_parent(format!("projects/{}", project_id))
+                .send()
+                .await;
+            tracing::info!("finished e2e test");
+            Ok::<String, anyhow::Error>(trace_id)
+        }
+        .instrument(root_span)
         .await?;
 
         // 6. Flush
@@ -135,9 +156,9 @@ mod observability {
         );
 
         let mut found = false;
-        for i in 1..=12 {
-            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-            tracing::info!("Polling attempt {}/12 for {}", i, url);
+        for i in 1..=5 {
+            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+            tracing::info!("Polling attempt {}/5 for {}", i, url);
 
             let response = http_client
                 .get(&url)
