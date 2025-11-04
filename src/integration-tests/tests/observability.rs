@@ -26,13 +26,21 @@ mod observability {
     #[derive(Clone)]
     struct AuthInterceptor {
         token: String,
+        project_id: String,
     }
 
     impl Interceptor for AuthInterceptor {
         fn call(&mut self, mut request: tonic::Request<()>) -> Result<tonic::Request<()>, Status> {
-            let val = MetadataValue::try_from(&self.token)
-                .map_err(|e| Status::internal(format!("failed to create metadata value: {}", e)))?;
-            request.metadata_mut().insert("authorization", val);
+            let auth_val = MetadataValue::try_from(&self.token)
+                .map_err(|e| Status::internal(format!("failed to create auth metadata: {}", e)))?;
+            request.metadata_mut().insert("authorization", auth_val);
+
+            let project_val = MetadataValue::try_from(&self.project_id)
+                .map_err(|e| Status::internal(format!("failed to create project metadata: {}", e)))?;
+            request
+                .metadata_mut()
+                .insert("x-goog-user-project", project_val);
+
             Ok(request)
         }
     }
@@ -64,6 +72,7 @@ mod observability {
         // 2. Configure OTLP gRPC Exporter
         let interceptor = AuthInterceptor {
             token, // It already has "Bearer " prefix
+            project_id: project_id.clone(),
         };
 
         let exporter = opentelemetry_otlp::SpanExporter::builder()
