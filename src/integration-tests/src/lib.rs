@@ -22,6 +22,8 @@ pub mod bigquery;
 pub mod compute;
 pub mod error_details;
 pub mod firestore;
+#[cfg(google_cloud_unstable_tracing)]
+pub mod observability;
 pub mod pubsub;
 pub mod secret_manager;
 pub mod showcase;
@@ -65,8 +67,8 @@ pub fn zone_id() -> String {
 }
 
 pub fn report_error(e: anyhow::Error) -> anyhow::Error {
-    eprintln!("\n\nERROR {e:?}\n");
-    tracing::error!("ERROR {e:?}");
+    eprintln!("\n\nERROR {{e:?}}\n");
+    tracing::error!("ERROR {{e:?}}");
     e
 }
 
