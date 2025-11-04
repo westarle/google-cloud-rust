@@ -15,11 +15,12 @@
 #[cfg(all(test, feature = "run-integration-tests"))]
 mod observability {
     use auth::credentials::Builder;
-    use opentelemetry::trace::TracerProvider as _;
+    use opentelemetry::trace::{TraceContextExt, TracerProvider as _};
     use opentelemetry_otlp::{WithExportConfig, WithTonicConfig};
     use opentelemetry_sdk::trace::SdkTracerProvider;
     use tonic::{metadata::MetadataValue, service::Interceptor, Status};
     use tracing::Instrument;
+    use tracing_opentelemetry::OpenTelemetrySpanExt;
     use tracing_subscriber::layer::SubscriberExt;
     use tracing_subscriber::Registry;
 
@@ -68,6 +69,7 @@ mod observability {
                 .to_string(),
             _ => return Err(anyhow::anyhow!("failed to get new headers")),
         };
+        let token_clone = token.clone();
 
         // 2. Configure OTLP gRPC Exporter
         let interceptor = AuthInterceptor {
@@ -91,9 +93,12 @@ mod observability {
         let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
         let subscriber = Registry::default().with(telemetry);
 
-        tracing::subscriber::with_default(subscriber, || async {
+        let trace_id_hex = tracing::subscriber::with_default(subscriber, || async {
             // 5. Generate Spans
             let root_span = tracing::info_span!("e2e_test_root");
+            let trace_id = root_span.context().span().span_context().trace_id().to_string();
+            tracing::info!("Generated Trace ID: {}", trace_id);
+
             async {
                 tracing::info!("starting e2e test");
                 // Make a real API call to generate library spans
@@ -108,7 +113,7 @@ mod observability {
                     .send()
                     .await;
                 tracing::info!("finished e2e test");
-                Ok::<(), anyhow::Error>(())
+                Ok::<String, anyhow::Error>(trace_id)
             }
             .instrument(root_span)
             .await
@@ -117,6 +122,44 @@ mod observability {
 
         // 6. Flush
         let _ = tracer_provider.force_flush();
+
+        // 7. Verify Trace via raw HTTP (since v2 client doesn't support read)
+        tracing::info!(
+            "Verifying trace {} in Cloud Trace via HTTP...",
+            trace_id_hex
+        );
+        let http_client = reqwest::Client::new();
+        let url = format!(
+            "https://cloudtrace.googleapis.com/v1/projects/{}/traces/{}",
+            project_id, trace_id_hex
+        );
+
+        let mut found = false;
+        for i in 1..=12 {
+            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+            tracing::info!("Polling attempt {}/12 for {}", i, url);
+
+            let response = http_client
+                .get(&url)
+                .header(reqwest::header::AUTHORIZATION, &token_clone)
+                .send()
+                .await?;
+
+            if response.status().is_success() {
+                tracing::info!("Successfully found trace {} in Cloud Trace!", trace_id_hex);
+                found = true;
+                break;
+            } else {
+                tracing::debug!("Trace not found yet: status {}", response.status());
+            }
+        }
+
+        if !found {
+            return Err(anyhow::anyhow!(
+                "Timed out waiting for trace {} to appear in Cloud Trace",
+                trace_id_hex
+            ));
+        }
 
         Ok(())
     }
