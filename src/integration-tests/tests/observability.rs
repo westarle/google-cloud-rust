@@ -18,29 +18,30 @@ mod observability {
     use opentelemetry::trace::{TraceContextExt, TracerProvider as _};
     use opentelemetry_otlp::{WithExportConfig, WithTonicConfig};
     use opentelemetry_sdk::trace::SdkTracerProvider;
-    use tonic::{metadata::MetadataValue, service::Interceptor, Status};
+    use tonic::{
+        metadata::{Ascii, MetadataValue},
+        service::Interceptor,
+        Status,
+    };
     use tracing::Instrument;
     use tracing_opentelemetry::OpenTelemetrySpanExt;
     use tracing_subscriber::layer::SubscriberExt;
-    use tracing_subscriber::Registry;
+    use tracing_subscriber::{EnvFilter, Registry};
 
     #[derive(Clone)]
     struct AuthInterceptor {
-        token: String,
-        project_id: String,
+        auth_header: MetadataValue<Ascii>,
+        project_header: MetadataValue<Ascii>,
     }
 
     impl Interceptor for AuthInterceptor {
         fn call(&mut self, mut request: tonic::Request<()>) -> Result<tonic::Request<()>, Status> {
-            let auth_val = MetadataValue::try_from(&self.token)
-                .map_err(|e| Status::internal(format!("failed to create auth metadata: {}", e)))?;
-            request.metadata_mut().insert("authorization", auth_val);
-
-            let project_val = MetadataValue::try_from(&self.project_id)
-                .map_err(|e| Status::internal(format!("failed to create project metadata: {}", e)))?;
             request
                 .metadata_mut()
-                .insert("x-goog-user-project", project_val);
+                .insert("authorization", self.auth_header.clone());
+            request
+                .metadata_mut()
+                .insert("x-goog-user-project", self.project_header.clone());
 
             Ok(request)
         }
@@ -60,21 +61,24 @@ mod observability {
             .await
             .map_err(|e| anyhow::anyhow!("failed to get headers: {:?}", e))?;
 
-        let token = match headers {
-            auth::credentials::CacheableResource::New { data, .. } => data
-                .get(http::header::AUTHORIZATION)
-                .ok_or_else(|| anyhow::anyhow!("no authorization header"))?
-                .to_str()
-                .map_err(|e| anyhow::anyhow!("invalid authorization header: {:?}", e))?
-                .to_string(),
+        let headers_map = match headers {
+            auth::credentials::CacheableResource::New { data, .. } => data,
             _ => return Err(anyhow::anyhow!("failed to get new headers")),
         };
-        let token_clone = token.clone();
 
-        // 2. Configure OTLP gRPC Exporter
+        let auth_val = headers_map
+            .get(http::header::AUTHORIZATION)
+            .ok_or_else(|| anyhow::anyhow!("no authorization header"))?;
+
+        let auth_header = MetadataValue::try_from(auth_val.as_bytes())
+            .map_err(|e| anyhow::anyhow!("invalid auth header bytes: {:?}", e))?;
+
+        let project_header = MetadataValue::try_from(&project_id)
+            .map_err(|e| anyhow::anyhow!("failed to create project metadata: {:?}", e))?;
+
         let interceptor = AuthInterceptor {
-            token, // It already has "Bearer " prefix
-            project_id: project_id.clone(),
+            auth_header,
+            project_header,
         };
 
         let exporter = opentelemetry_otlp::SpanExporter::builder()
@@ -104,7 +108,11 @@ mod observability {
         // 4. Install Global Subscriber
         let tracer = tracer_provider.tracer("e2e-test");
         let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
+        let env_filter = EnvFilter::try_from_default_env()
+            .unwrap_or_else(|_| EnvFilter::new("info"));
+
         let subscriber = Registry::default()
+            .with(env_filter)
             .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))
             .with(telemetry);
 
@@ -162,7 +170,7 @@ mod observability {
 
             let response = http_client
                 .get(&url)
-                .header(reqwest::header::AUTHORIZATION, &token_clone)
+                .header(reqwest::header::AUTHORIZATION, auth_val.clone())
                 .send()
                 .await?;
 

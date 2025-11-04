@@ -50,7 +50,7 @@ tokio                             = { workspace = true, features = ["process"] }
 tonic.workspace                   = true
 tracing.workspace                 = true
 tracing-opentelemetry.workspace   = true
-tracing-subscriber                = { workspace = true, features = ["fmt", "std"] }
+tracing-subscriber                = { workspace = true, features = ["fmt", "std", "env-filter"] }
 uuid                              = { workspace = true, features = ["std", "v4"] }
 wkt.workspace                     = true
 # Formatting trick: this comment preserves formatting in the preceding block.
