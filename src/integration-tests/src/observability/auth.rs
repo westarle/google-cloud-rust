@@ -33,6 +33,11 @@ impl GcpInterceptor {
         tokio::spawn(refresh_task(credentials, tx));
         Self { rx }
     }
+
+    #[cfg(test)]
+    pub(crate) fn from_rx(rx: watch::Receiver<Option<HeaderMap>>) -> Self {
+        Self { rx }
+    }
 }
 
 impl Interceptor for GcpInterceptor {
