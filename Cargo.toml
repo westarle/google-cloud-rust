@@ -305,7 +305,9 @@ hyper                 = { default-features = false, version = "1" }
 jsonwebtoken          = { default-features = false, version = "10" }
 lazy_static           = { default-features = false, version = "1.2" }
 opentelemetry         = { default-features = false, version = "0.31", features = ["trace"] }
+opentelemetry-otlp    = { default-features = false, version = "0.31", features = ["grpc-tonic", "tls", "tls-roots", "trace"] }
 opentelemetry_sdk     = { default-features = false, version = "0.31", features = ["rt-tokio", "trace"] }
+opentelemetry-semantic-conventions = { default-features = false, version = "0.31.0", features = ["semconv_experimental"] }
 parse-size            = { default-features = false, version = "1" }
 percent-encoding      = { default-features = false, version = "2" }
 pin-project           = { default-features = false, version = "1" }
@@ -327,22 +329,13 @@ tokio-metrics         = { default-features = false, version = "0.4" }
 tonic                 = { default-features = false, version = "0.14.1", features = ["tls-native-roots", "tls-ring"] }
 tonic-prost           = { default-features = false, version = "0.14.2" }
 tonic-prost-build     = { default-features = false, version = "0.14.1" }
+tower                 = { default-features = false, version = "0.5" }
 tracing               = { default-features = false, version = "0.1.41", features = ["attributes"] }
 tracing-log           = { default-features = false, version = "0.2" }
 tracing-opentelemetry = { default-features = false, version = "0.32" }
 tracing-subscriber    = { default-features = false, version = "0.3.18" }
 url                   = { default-features = false, version = "2" }
 uuid                  = { default-features = false, version = "1", features = ["v4"] }
-
-opentelemetry-otlp = { default-features = false, version = "0.31", features = [
-  "grpc-tonic",
-  "tls",
-  "tls-roots",
-  "trace",
-] }
-opentelemetry-semantic-conventions = { default-features = false, version = "0.31.0", features = [
-  "semconv_experimental",
-] }
 
 
 # Transitive dependencies. Used for minimal version selection.

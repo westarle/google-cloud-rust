@@ -32,7 +32,13 @@ use http::HeaderMap;
 use std::sync::Arc;
 use std::time::Duration;
 
+#[cfg(not(google_cloud_unstable_tracing))]
 pub type InnerClient = tonic::client::Grpc<tonic::transport::Channel>;
+
+#[cfg(google_cloud_unstable_tracing)]
+pub type InnerClient = tonic::client::Grpc<
+    crate::observability::grpc_tracing::GrpcTowerService<tonic::transport::Channel>,
+>;
 
 #[derive(Clone, Debug)]
 pub struct Client {
@@ -43,8 +49,6 @@ pub struct Client {
     retry_throttler: SharedRetryThrottler,
     polling_error_policy: Arc<dyn PollingErrorPolicy>,
     polling_backoff_policy: Arc<dyn PollingBackoffPolicy>,
-    #[cfg(google_cloud_unstable_tracing)]
-    instrumentation: Option<&'static crate::options::InstrumentationClientInfo>,
 }
 
 impl Client {
@@ -54,8 +58,28 @@ impl Client {
         default_endpoint: &str,
     ) -> gax::client_builder::Result<Self> {
         let credentials = Self::make_credentials(&config).await?;
-        let inner = Self::make_inner(config.endpoint, default_endpoint).await?;
-        Ok(Self {
+        let inner = Self::make_inner(&config, default_endpoint, None).await?;
+        Ok(Self::build(inner, credentials, config))
+    }
+
+    /// Create a new client with instrumentation.
+    #[cfg(google_cloud_unstable_tracing)]
+    pub async fn new_with_instrumentation(
+        config: crate::options::ClientConfig,
+        default_endpoint: &str,
+        instrumentation: &'static crate::options::InstrumentationClientInfo,
+    ) -> gax::client_builder::Result<Self> {
+        let credentials = Self::make_credentials(&config).await?;
+        let inner = Self::make_inner(&config, default_endpoint, Some(instrumentation)).await?;
+        Ok(Self::build(inner, credentials, config))
+    }
+
+    fn build(
+        inner: InnerClient,
+        credentials: Credentials,
+        config: crate::options::ClientConfig,
+    ) -> Self {
+        Self {
             inner,
             credentials,
             retry_policy: config.retry_policy.clone().unwrap_or_else(|| {
@@ -76,19 +100,7 @@ impl Client {
             polling_backoff_policy: config
                 .polling_backoff_policy
                 .unwrap_or_else(|| Arc::new(ExponentialBackoff::default())),
-            #[cfg(google_cloud_unstable_tracing)]
-            instrumentation: None,
-        })
-    }
-
-    /// Sets the instrumentation client info.
-    #[cfg(google_cloud_unstable_tracing)]
-    pub fn with_instrumentation(
-        mut self,
-        instrumentation: &'static crate::options::InstrumentationClientInfo,
-    ) -> Self {
-        self.instrumentation = Some(instrumentation);
-        self
+        }
     }
 
     /// Sends a request.
@@ -242,22 +254,52 @@ impl Client {
     }
 
     async fn make_inner(
-        endpoint: Option<String>,
+        config: &crate::options::ClientConfig,
         default_endpoint: &str,
+        instrumentation: Option<&'static crate::options::InstrumentationClientInfo>,
     ) -> gax::client_builder::Result<InnerClient> {
         use tonic::transport::{ClientTlsConfig, Endpoint};
 
-        let origin =
-            crate::host::from_endpoint(endpoint.as_deref(), default_endpoint, |origin, _host| {
-                origin
-            })?;
+        let endpoint_opt = config.endpoint.clone();
+        let origin = crate::host::from_endpoint(
+            endpoint_opt.as_deref(),
+            default_endpoint,
+            |origin, _host| origin,
+        )?;
         let endpoint =
-            Endpoint::from_shared(endpoint.unwrap_or_else(|| default_endpoint.to_string()))
+            Endpoint::from_shared(endpoint_opt.unwrap_or_else(|| default_endpoint.to_string()))
                 .map_err(BuilderError::transport)?
                 .tls_config(ClientTlsConfig::new().with_enabled_roots())
                 .map_err(BuilderError::transport)?
-                .origin(origin);
-        Ok(InnerClient::new(endpoint.connect_lazy()))
+                .origin(origin.clone());
+        let channel = endpoint.connect_lazy();
+
+        #[cfg(not(google_cloud_unstable_tracing))]
+        {
+            let _ = instrumentation;
+            Ok(InnerClient::new(channel))
+        }
+
+        #[cfg(google_cloud_unstable_tracing)]
+        {
+            use crate::observability::grpc_tracing::GrpcTowerLayer;
+            use tower::ServiceBuilder;
+
+            let host = origin.host().unwrap_or_default().to_string();
+            let port = origin.port_u16().unwrap_or(443);
+
+            let layer = GrpcTowerLayer::new(
+                config.clone(),
+                host.clone(),
+                port,
+                host, // url_domain same as host for now
+                instrumentation,
+            );
+
+            let service = ServiceBuilder::new().layer(layer).service(channel);
+
+            Ok(InnerClient::new(service))
+        }
     }
 
     async fn make_credentials(
@@ -384,19 +426,68 @@ mod tests {
     use super::Client;
     use crate::options::InstrumentationClientInfo;
 
-    #[tokio::test]
-    async fn test_with_instrumentation() {
-        let config = crate::options::ClientConfig::default();
-        let client = Client::new(config, "http://example.com").await.unwrap();
-        assert!(client.instrumentation.is_none());
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    #[serial_test::serial]
+    async fn test_e2e_tracing_enabled() {
+        let _e = scoped_env::ScopedEnv::set("GOOGLE_CLOUD_RUST_LOGGING", "true");
+        let (endpoint, _server) = grpc_server::start_echo_server().await.unwrap();
+        let mut config = crate::options::ClientConfig::default();
+        config.endpoint = Some(endpoint.clone());
+        config.cred = Some(auth::credentials::anonymous::Builder::new().build());
+        let client = Client::new(config, &endpoint).await.unwrap();
+
+        let request = grpc_server::google::test::v1::EchoRequest {
+            message: "test".to_string(),
+            ..Default::default()
+        };
+        let path = http::uri::PathAndQuery::from_static("/google.test.v1.EchoService/Echo");
+        let _response = client
+            .execute::<_, grpc_server::google::test::v1::EchoResponse>(
+                tonic::Extensions::new(),
+                path,
+                request,
+                gax::options::RequestOptions::default(),
+                "test-client",
+                "",
+            )
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    #[serial_test::serial]
+    async fn test_e2e_with_instrumentation() {
+        let _e = scoped_env::ScopedEnv::set("GOOGLE_CLOUD_RUST_LOGGING", "true");
+        let (endpoint, _server) = grpc_server::start_echo_server().await.unwrap();
+        let mut config = crate::options::ClientConfig::default();
+        config.endpoint = Some(endpoint.clone());
+        config.cred = Some(auth::credentials::anonymous::Builder::new().build());
+
         static TEST_INFO: InstrumentationClientInfo = InstrumentationClientInfo {
             service_name: "test-service",
             client_version: "1.0.0",
             client_artifact: "test-artifact",
             default_host: "example.com",
         };
-        let client = client.with_instrumentation(&TEST_INFO);
-        assert!(client.instrumentation.is_some());
-        assert_eq!(client.instrumentation.unwrap().service_name, "test-service");
+        let client = Client::new_with_instrumentation(config, &endpoint, &TEST_INFO)
+            .await
+            .unwrap();
+
+        let request = grpc_server::google::test::v1::EchoRequest {
+            message: "test".to_string(),
+            ..Default::default()
+        };
+        let path = http::uri::PathAndQuery::from_static("/google.test.v1.EchoService/Echo");
+        let _response = client
+            .execute::<_, grpc_server::google::test::v1::EchoResponse>(
+                tonic::Extensions::new(),
+                path,
+                request,
+                gax::options::RequestOptions::default(),
+                "test-client",
+                "",
+            )
+            .await
+            .unwrap();
     }
 }
