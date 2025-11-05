@@ -32,7 +32,12 @@ async fn test_end_to_end_tracing() -> Result<(), Box<dyn std::error::Error>> {
 
     let interceptor = GcpInterceptor::new(credentials.clone());
 
+    // Component 4: GoogleCloudTracerProvider
+    // Initializes the OTel SDK with our authenticated exporter.
     let provider = init_tracer_provider(&project_id, interceptor)?;
+
+    // Component 3: GoogleCloudTracingLayer
+    // Installs the configured tracing-opentelemetry layer.
     init_tracing(provider.clone());
 
     {
