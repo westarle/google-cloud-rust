@@ -27,12 +27,17 @@ pub fn init_tracer_provider(
 }
 
 pub(crate) fn init_otlp_tracer_provider(
-    _project_id: &str,
+    project_id: &str,
     interceptor: GcpInterceptor,
     endpoint: &str,
     use_tls: bool,
 ) -> Result<SdkTracerProvider, TraceError> {
-    // TODO: Add GCP resource attributes once we figure out Resource::new in 0.31
+    let resource = opentelemetry_sdk::Resource::builder_empty()
+        .with_attributes(vec![
+            opentelemetry::KeyValue::new("gcp.project_id", project_id.to_string()),
+            opentelemetry::KeyValue::new("service.name", "google-cloud-rust-e2e"),
+        ])
+        .build();
 
     let mut exporter_builder = opentelemetry_otlp::SpanExporter::builder()
         .with_tonic()
@@ -40,7 +45,9 @@ pub(crate) fn init_otlp_tracer_provider(
         .with_interceptor(interceptor);
 
     if use_tls {
-        let tls_config = ClientTlsConfig::new().domain_name("telemetry.googleapis.com");
+        let tls_config = ClientTlsConfig::new()
+            .with_enabled_roots()
+            .domain_name("telemetry.googleapis.com");
         exporter_builder = exporter_builder.with_tls_config(tls_config);
     }
 
@@ -49,6 +56,7 @@ pub(crate) fn init_otlp_tracer_provider(
         .map_err(|e| TraceError::Other(e.into()))?;
 
     let provider = SdkTracerProvider::builder()
+        .with_resource(resource)
         .with_batch_exporter(exporter)
         .build();
 
