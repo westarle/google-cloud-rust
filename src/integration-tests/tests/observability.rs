@@ -42,6 +42,7 @@ async fn test_end_to_end_tracing() -> Result<(), Box<dyn std::error::Error>> {
 
         let client = SecretManagerService::builder()
             .with_credentials(credentials)
+            .with_tracing()
             .build()
             .await?;
 
