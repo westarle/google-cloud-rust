@@ -14,12 +14,17 @@
 
 use opentelemetry::trace::TracerProvider as _;
 use opentelemetry_sdk::trace::SdkTracerProvider;
-use tracing_subscriber::{Registry, layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::{EnvFilter, Registry, layer::SubscriberExt, util::SubscriberInitExt, Layer};
 
 pub fn init_tracing(tracer_provider: SdkTracerProvider) {
     let tracer = tracer_provider.tracer("google-cloud-rust-integration-test");
 
-    let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
+    let env_filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new("info"));
+
+    let telemetry = tracing_opentelemetry::layer()
+        .with_tracer(tracer)
+        .with_filter(env_filter);
 
     // Ignore error if subscriber is already set
     let _ = Registry::default()
