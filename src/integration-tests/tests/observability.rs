@@ -21,12 +21,14 @@ async fn test_end_to_end_tracing() -> Result<(), Box<dyn std::error::Error>> {
     use sm::client::SecretManagerService;
     use tracing::{info, info_span};
 
-    let project_id =
-        std::env::var("GOOGLE_CLOUD_PROJECT").unwrap_or_else(|_| "test-project".to_string());
+    let project_id = std::env::var("GOOGLE_CLOUD_PROJECT")
+        .expect("GOOGLE_CLOUD_PROJECT must be set for this integration test");
 
-    // Use error credentials if real ones are not available, to allow test to run in CI without secrets.
-    // In a real E2E env, we would use Builder::default().build()?;
-    let credentials = auth::credentials::testing::error_credentials(true);
+    // Use ADC for real E2E testing.
+    let scopes = ["https://www.googleapis.com/auth/cloud-platform"];
+    let credentials = auth::credentials::Builder::default()
+        .with_scopes(scopes)
+        .build()?;
 
     let interceptor = GcpInterceptor::new(credentials.clone());
 
