@@ -82,9 +82,9 @@ pub struct GrpcTowerService<S> {
     layer: GrpcTowerLayer,
 }
 
-impl<S, B> Service<http::Request<B>> for GrpcTowerService<S>
+impl<S, B, ResBody> Service<http::Request<B>> for GrpcTowerService<S>
 where
-    S: Service<http::Request<B>> + Clone + Send + 'static,
+    S: Service<http::Request<B>, Response = http::Response<ResBody>> + Clone + Send + 'static,
     S::Future: Send + 'static,
     S::Error: std::fmt::Display,
 {
@@ -146,6 +146,7 @@ where
         Box::pin(ResponseFuture {
             inner: future,
             span,
+            completed: false,
         })
     }
 }
@@ -154,30 +155,44 @@ where
 ///
 /// This future polls the inner future and, upon completion, records the
 /// gRPC status code and OpenTelemetry status code to the span.
-#[pin_project::pin_project]
+#[pin_project::pin_project(PinnedDrop)]
 pub struct ResponseFuture<F> {
     #[pin]
     inner: F,
     span: Span,
+    completed: bool,
 }
 
-impl<F, Response, Error> Future for ResponseFuture<F>
+impl<F, B, Error> Future for ResponseFuture<F>
 where
-    F: Future<Output = Result<Response, Error>>,
+    F: Future<Output = Result<http::Response<B>, Error>>,
     Error: std::fmt::Display,
 {
-    type Output = Result<Response, Error>;
+    type Output = Result<http::Response<B>, Error>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.project();
         let _enter = this.span.enter();
         let result = futures_util::ready!(this.inner.poll(cx));
 
+        *this.completed = true;
+
         match &result {
-            Ok(_) => {
-                this.span
-                    .record("rpc.grpc.status_code", tonic::Code::Ok as i32);
-                this.span.record("otel.status_code", "OK");
+            Ok(response) => {
+                let status_code = response
+                    .headers()
+                    .get("grpc-status")
+                    .and_then(|v| v.to_str().ok())
+                    .and_then(|s| s.parse::<i32>().ok())
+                    .unwrap_or(0);
+
+                this.span.record("rpc.grpc.status_code", status_code as i64);
+
+                if status_code != 0 {
+                    this.span.record("otel.status_code", "ERROR");
+                } else {
+                    this.span.record("otel.status_code", "OK");
+                }
             }
             Err(e) => {
                 // TODO: Try to extract tonic::Status from error if possible
@@ -186,6 +201,15 @@ where
             }
         }
         Poll::Ready(result)
+    }
+}
+
+#[pin_project::pinned_drop]
+impl<F> PinnedDrop for ResponseFuture<F> {
+    fn drop(self: Pin<&mut Self>) {
+        if !self.completed {
+            self.span.record("otel.status_code", "ERROR");
+        }
     }
 }
 

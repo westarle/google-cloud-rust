@@ -15,10 +15,11 @@
 #[cfg(all(test, feature = "_internal-grpc-client", google_cloud_unstable_tracing))]
 mod tests {
     use gax::options::RequestOptions;
+    use gax::retry_policy::{Aip194Strict, NeverRetry, RetryPolicyExt};
     use google_cloud_gax_internal::grpc;
     use google_cloud_gax_internal::options::InstrumentationClientInfo;
     use google_cloud_test_utils::test_layer::{AttributeValue, TestLayer};
-    use grpc_server::{google, start_echo_server};
+    use grpc_server::{google, start_echo_server, start_fixed_responses};
 
     const TEST_SERVICE: &str = "test.service";
     const TEST_VERSION: &str = "1.2.3";
@@ -120,11 +121,6 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn test_grpc_error_span() -> anyhow::Result<()> {
-        // Start server but we'll send a request that triggers an error if possible,
-        // or just connect to an invalid endpoint to trigger connection error.
-        // Actually, let's use the echo server and send a request that returns an error status.
-        // The echo server might not support forcing an error easily without modifying it.
-        // Let's try connecting to a closed port.
         let guard = TestLayer::initialize();
 
         let mut config = google_cloud_gax_internal::options::ClientConfig::default();
@@ -162,15 +158,137 @@ mod tests {
             attrs.get("otel.status_code"),
             Some(&AttributeValue::String("ERROR".into()))
         );
-        // Status code might not be present if it failed before getting a response status
-        // But we should have otel.status_code = ERROR
 
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_grpc_retry_span() -> anyhow::Result<()> {
+        let guard = TestLayer::initialize();
+        let (endpoint, _server) = start_fixed_responses(vec![
+            Err(tonic::Status::unavailable("try again")),
+            Ok(tonic::Response::new(google::test::v1::EchoResponse {
+                message: "success".into(),
+                ..Default::default()
+            })),
+        ])
+        .await?;
+
+        let mut config = google_cloud_gax_internal::options::ClientConfig::default();
+        config.tracing = true;
+        config.cred = Some(test_credentials());
+
+        let client = grpc::Client::new_with_instrumentation(
+            config,
+            &endpoint,
+            &TEST_INSTRUMENTATION_INFO,
+        )
+        .await?;
+
+        // Configure retry policy
+        let mut request_options = RequestOptions::default();
+        request_options.set_retry_policy(Aip194Strict.with_attempt_limit(3));
+        request_options.set_idempotency(true);
+
+        // Send request (default retry policy should handle Unavailable)
+        let response = send_request_with_options(client, "test", request_options).await?;
+        assert_eq!(response.message, "success");
+
+        let spans = TestLayer::capture(&guard);
+        let grpc_spans: Vec<_> = spans.iter().filter(|s| s.name == "grpc.request").collect();
+        
+        // Should have 2 spans: one for failure, one for success
+        assert_eq!(grpc_spans.len(), 2, "Should capture two grpc.request spans");
+        
+        let fail_span = grpc_spans[0];
+        assert_eq!(fail_span.attributes.get("otel.status_code"), Some(&AttributeValue::String("ERROR".into())));
+        
+        let success_span = grpc_spans[1];
+        assert_eq!(success_span.attributes.get("otel.status_code"), Some(&AttributeValue::String("OK".into())));
+
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_grpc_timeout_span() -> anyhow::Result<()> {
+        let (endpoint, _server) = start_echo_server().await?;
+        let guard = TestLayer::initialize();
+
+        let mut config = google_cloud_gax_internal::options::ClientConfig::default();
+        config.tracing = true;
+        config.cred = Some(test_credentials());
+
+        let client = grpc::Client::new_with_instrumentation(
+            config,
+            &endpoint,
+            &TEST_INSTRUMENTATION_INFO,
+        )
+        .await?;
+
+        let mut request_options = RequestOptions::default();
+        request_options.set_attempt_timeout(std::time::Duration::from_millis(100));
+        request_options.set_retry_policy(NeverRetry);
+
+        // Send request with delay > timeout
+        let result = send_request_with_delay(client, "test", 200, request_options).await;
+        assert!(result.is_err());
+
+        let spans = TestLayer::capture(&guard);
+        let grpc_spans: Vec<_> = spans.iter().filter(|s| s.name == "grpc.request").collect();
+        assert_eq!(grpc_spans.len(), 1);
+        
+        let span = grpc_spans[0];
+        assert_eq!(span.attributes.get("otel.status_code"), Some(&AttributeValue::String("ERROR".into())));
+        
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_grpc_cancellation_span() -> anyhow::Result<()> {
+        let (endpoint, _server) = start_echo_server().await?;
+        let guard = TestLayer::initialize();
+
+        let mut config = google_cloud_gax_internal::options::ClientConfig::default();
+        config.tracing = true;
+        config.cred = Some(test_credentials());
+
+        let client = grpc::Client::new_with_instrumentation(
+            config,
+            &endpoint,
+            &TEST_INSTRUMENTATION_INFO,
+        )
+        .await?;
+
+        let mut request_options = RequestOptions::default();
+        request_options.set_retry_policy(NeverRetry);
+
+        // Send request with long delay
+        let future = send_request_with_delay(client, "test", 5000, request_options);
+        
+        // Drop the future after a short time
+        let _ = tokio::time::timeout(std::time::Duration::from_millis(100), future).await;
+
+        let spans = TestLayer::capture(&guard);
+        let grpc_spans: Vec<_> = spans.iter().filter(|s| s.name == "grpc.request").collect();
+        assert_eq!(grpc_spans.len(), 1);
+        
+        let span = grpc_spans[0];
+        assert_eq!(span.attributes.get("otel.status_code"), Some(&AttributeValue::String("ERROR".into())));
+        
         Ok(())
     }
 
     async fn send_request(
         client: grpc::Client,
         msg: &str,
+    ) -> gax::Result<google::test::v1::EchoResponse> {
+        send_request_with_options(client, msg, RequestOptions::default()).await
+    }
+
+    async fn send_request_with_options(
+        client: grpc::Client,
+        msg: &str,
+        options: RequestOptions,
     ) -> gax::Result<google::test::v1::EchoResponse> {
         let extensions = {
             let mut e = tonic::Extensions::new();
@@ -189,7 +307,39 @@ mod tests {
                 extensions,
                 http::uri::PathAndQuery::from_static("/google.test.v1.EchoService/Echo"),
                 request,
-                RequestOptions::default(),
+                options,
+                "test-only-api-client/1.0",
+                "name=test-only",
+            )
+            .await
+            .map(tonic::Response::into_inner)
+    }
+
+    async fn send_request_with_delay(
+        client: grpc::Client,
+        msg: &str,
+        delay_ms: u64,
+        options: RequestOptions,
+    ) -> gax::Result<google::test::v1::EchoResponse> {
+        let extensions = {
+            let mut e = tonic::Extensions::new();
+            e.insert(tonic::GrpcMethod::new(
+                "google.test.v1.EchoServices",
+                "Echo",
+            ));
+            e
+        };
+        let request = google::test::v1::EchoRequest {
+            message: msg.into(),
+            delay_ms: Some(delay_ms),
+            ..Default::default()
+        };
+        client
+            .execute(
+                extensions,
+                http::uri::PathAndQuery::from_static("/google.test.v1.EchoService/Echo"),
+                request,
+                options,
                 "test-only-api-client/1.0",
                 "name=test-only",
             )
