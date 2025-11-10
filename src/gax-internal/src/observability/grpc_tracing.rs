@@ -13,77 +13,17 @@
 // limitations under the License.
 
 use crate::options::{ClientConfig, InstrumentationClientInfo};
-
-/// Holds information required to create and finalize a gRPC network span.
-#[derive(Debug)]
-pub(crate) struct GrpcSpanInfo {
-    pub rpc_service: String,
-    pub rpc_method: String,
-    pub server_address: String,
-    pub server_port: u16,
-    pub url_domain: String,
-    pub client_info: Option<&'static InstrumentationClientInfo>,
-}
-
-impl GrpcSpanInfo {
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        rpc_service: String,
-        rpc_method: String,
-        server_address: String,
-        server_port: u16,
-        url_domain: String,
-        client_info: Option<&'static InstrumentationClientInfo>,
-    ) -> Self {
-        Self {
-            rpc_service,
-            rpc_method,
-            server_address,
-            server_port,
-            url_domain,
-            client_info,
-        }
-    }
-}
-
-#[cfg(test)]
-mod span_info_tests {
-    use super::*;
-    use crate::options::InstrumentationClientInfo;
-
-    #[test]
-    fn test_grpc_span_info_new() {
-        static TEST_INFO: InstrumentationClientInfo = InstrumentationClientInfo {
-            service_name: "test-service",
-            client_version: "1.0.0",
-            client_artifact: "test-artifact",
-            default_host: "example.com",
-        };
-
-        let span_info = GrpcSpanInfo::new(
-            "my.service".to_string(),
-            "MyMethod".to_string(),
-            "example.com".to_string(),
-            443,
-            "example.com".to_string(),
-            Some(&TEST_INFO),
-        );
-
-        assert_eq!(span_info.rpc_service, "my.service");
-        assert_eq!(span_info.rpc_method, "MyMethod");
-        assert_eq!(span_info.server_address, "example.com");
-        assert_eq!(span_info.server_port, 443);
-        assert_eq!(span_info.url_domain, "example.com");
-        assert!(span_info.client_info.is_some());
-    }
-}
-
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 use tower::{Layer, Service};
 use tracing::{Instrument, Span, warn};
 
+/// A Tower layer that adds OpenTelemetry tracing to gRPC requests.
+///
+/// This layer is responsible for creating the `GrpcTowerService` which intercepts
+/// requests to create spans. It holds configuration and static information
+/// about the client and server that is common to all requests.
 #[derive(Clone, Debug)]
 pub struct GrpcTowerLayer {
     pub(crate) config: ClientConfig,
@@ -94,6 +34,15 @@ pub struct GrpcTowerLayer {
 }
 
 impl GrpcTowerLayer {
+    /// Creates a new `GrpcTowerLayer`.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - The client configuration, used to check if tracing is enabled.
+    /// * `server_address` - The logical address of the server (e.g., hostname).
+    /// * `server_port` - The port of the server.
+    /// * `url_domain` - The domain of the URL, often same as `server_address`.
+    /// * `client_info` - Optional information about the client for telemetry.
     pub fn new(
         config: ClientConfig,
         server_address: String,
@@ -122,6 +71,11 @@ impl<S> Layer<S> for GrpcTowerLayer {
     }
 }
 
+/// A Tower service that intercepts gRPC requests to create tracing spans.
+///
+/// This service wraps the inner gRPC service (typically a `tonic` channel).
+/// For each request, it creates a new OpenTelemetry span with standard gRPC
+/// attributes and instruments the request's future with this span.
 #[derive(Clone, Debug)]
 pub struct GrpcTowerService<S> {
     inner: S,
@@ -151,8 +105,8 @@ where
         // path is something like /google.pubsub.v1.Publisher/Publish
         let mut parts = path.split('/');
         parts.next(); // skip empty part before first '/'
-        let rpc_service = parts.next().unwrap_or_default().to_string();
-        let rpc_method = parts.next().unwrap_or_default().to_string();
+        let rpc_service = parts.next().unwrap_or_default();
+        let rpc_method = parts.next().unwrap_or_default();
 
         if rpc_service.is_empty() || rpc_method.is_empty() {
             warn!(
@@ -162,25 +116,16 @@ where
             return Box::pin(self.inner.call(req));
         }
 
-        let span_info = GrpcSpanInfo::new(
-            rpc_service,
-            rpc_method,
-            self.layer.server_address.clone(),
-            self.layer.server_port,
-            self.layer.url_domain.clone(),
-            self.layer.client_info,
-        );
-
         let span = tracing::info_span!(
             "grpc.request",
-            otel.name = format!("{}/{}", span_info.rpc_service, span_info.rpc_method).as_str(),
+            otel.name = format!("{}/{}", rpc_service, rpc_method).as_str(),
             otel.kind = "Client",
             rpc.system = "grpc",
-            rpc.service = span_info.rpc_service.as_str(),
-            rpc.method = span_info.rpc_method.as_str(),
-            server.address = span_info.server_address.as_str(),
-            server.port = span_info.server_port,
-            url.domain = span_info.url_domain.as_str(),
+            rpc.service = rpc_service,
+            rpc.method = rpc_method,
+            server.address = self.layer.server_address.as_str(),
+            server.port = self.layer.server_port,
+            url.domain = self.layer.url_domain.as_str(),
             rpc.grpc.status_code = tracing::field::Empty,
             otel.status_code = tracing::field::Empty,
             gcp.client.service = tracing::field::Empty,
@@ -189,7 +134,7 @@ where
             gcp.client.artifact = tracing::field::Empty,
         );
 
-        if let Some(client_info) = span_info.client_info {
+        if let Some(client_info) = self.layer.client_info {
             span.record("gcp.client.service", client_info.service_name);
             span.record("gcp.client.version", client_info.client_version);
             span.record("gcp.client.repo", "googleapis/google-cloud-rust");
@@ -201,17 +146,19 @@ where
         Box::pin(ResponseFuture {
             inner: future,
             span,
-            span_info,
         })
     }
 }
 
+/// A future that wraps the inner gRPC response future.
+///
+/// This future polls the inner future and, upon completion, records the
+/// gRPC status code and OpenTelemetry status code to the span.
 #[pin_project::pin_project]
 pub struct ResponseFuture<F> {
     #[pin]
     inner: F,
     span: Span,
-    span_info: GrpcSpanInfo,
 }
 
 impl<F, Response, Error> Future for ResponseFuture<F>
