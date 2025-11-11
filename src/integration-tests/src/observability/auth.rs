@@ -51,6 +51,7 @@ impl CloudTelemetryAuthInterceptor {
     /// Creates a new `CloudTelemetryAuthInterceptor` and starts a background task to keep
     /// credentials refreshed.
     pub fn new(credentials: Credentials) -> Self {
+        tracing::debug!("Creating CloudTelemetryAuthInterceptor");
         let (tx, rx) = watch::channel(None);
         tokio::spawn(refresh_task(credentials, tx));
         Self { rx }
@@ -65,6 +66,7 @@ impl Interceptor for CloudTelemetryAuthInterceptor {
             // If the first refresh hasn't completed yet, fail the request.
             // The OTLP exporter is expected to handle this transient failure
             // with its built-in retry mechanism.
+            tracing::warn!("GCP credentials not yet available for OTLP export");
             Status::unauthenticated("GCP credentials not yet available")
         })?;
 
@@ -80,6 +82,7 @@ impl Interceptor for CloudTelemetryAuthInterceptor {
                 }
             }
         }
+        tracing::info!("Injecting OTLP headers: {:?}", request.metadata());
         Ok(request)
     }
 }
@@ -87,6 +90,7 @@ impl Interceptor for CloudTelemetryAuthInterceptor {
 /// Background task that periodically refreshes credentials and sends them
 /// to the interceptor via a watch channel.
 async fn refresh_task(credentials: Credentials, tx: watch::Sender<Option<MetadataMap>>) {
+    tracing::debug!("Starting credential refresh task");
     let mut last_etag: Option<EntityTag> = None;
     loop {
         let mut extensions = http::Extensions::new();
@@ -96,6 +100,7 @@ async fn refresh_task(credentials: Credentials, tx: watch::Sender<Option<Metadat
 
         match credentials.headers(extensions).await {
             Ok(CacheableResource::New { entity_tag, data }) => {
+                tracing::debug!("Refreshed GCP credentials");
                 let mut metadata = MetadataMap::new();
                 for (name, value) in data.iter() {
                     if let (Ok(key), Ok(val)) = (
@@ -112,12 +117,14 @@ async fn refresh_task(credentials: Credentials, tx: watch::Sender<Option<Metadat
 
                 if tx.send(Some(metadata)).is_err() {
                     // Receiver dropped (all interceptors are gone), stop task.
+                    tracing::debug!("Credential refresh task stopping (receiver dropped)");
                     break;
                 }
                 last_etag = Some(entity_tag);
                 sleep(REFRESH_INTERVAL).await;
             }
             Ok(CacheableResource::NotModified) => {
+                tracing::trace!("GCP credentials not modified");
                 sleep(REFRESH_INTERVAL).await;
             }
             Err(e) => {
