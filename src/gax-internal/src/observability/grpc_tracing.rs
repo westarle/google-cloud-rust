@@ -26,12 +26,14 @@ use tracing::Instrument;
 /// It is typically used with [`tower::ServiceBuilder`] to add tracing middleware
 /// to a gRPC client.
 #[derive(Clone, Debug, Default)]
-pub struct TracingTowerLayer;
+pub struct TracingTowerLayer {
+    config: crate::options::ClientConfig,
+}
 
 impl TracingTowerLayer {
     /// Creates a new `TracingTowerLayer`.
-    pub fn new() -> Self {
-        Self
+    pub fn new(config: crate::options::ClientConfig) -> Self {
+        Self { config }
     }
 }
 
@@ -39,7 +41,10 @@ impl<S> Layer<S> for TracingTowerLayer {
     type Service = TracingTowerService<S>;
 
     fn layer(&self, inner: S) -> Self::Service {
-        TracingTowerService { inner }
+        TracingTowerService {
+            inner,
+            layer: self.clone(),
+        }
     }
 }
 
@@ -51,6 +56,7 @@ impl<S> Layer<S> for TracingTowerLayer {
 #[derive(Clone, Debug)]
 pub struct TracingTowerService<S> {
     inner: S,
+    layer: TracingTowerLayer,
 }
 
 impl<S, B, ResBody> Service<http::Request<B>> for TracingTowerService<S>
@@ -74,8 +80,79 @@ where
     }
 
     fn call(&mut self, req: http::Request<B>) -> Self::Future {
-        // TODO(#3418): Fill in details.
-        let span = tracing::info_span!("grpc.request");
+        if !crate::options::tracing_enabled(&self.layer.config) {
+            return Box::pin(self.inner.call(req));
+        }
+
+        let span_info = GrpcSpanInfo::new(req.uri(), &self.layer.config);
+        let span = span_info.create_span();
         Box::pin(self.inner.call(req).instrument(span))
+    }
+}
+
+struct GrpcSpanInfo {
+    rpc_service: String,
+    rpc_method: String,
+    server_address: String,
+    server_port: Option<u16>,
+    url_domain: String,
+}
+
+impl GrpcSpanInfo {
+    fn new(uri: &http::Uri, config: &crate::options::ClientConfig) -> Self {
+        let (rpc_service, rpc_method) = Self::parse_method(uri.path());
+        let (server_address, server_port, url_domain) = Self::parse_endpoint(config);
+        Self {
+            rpc_service,
+            rpc_method,
+            server_address,
+            server_port,
+            url_domain,
+        }
+    }
+
+    fn parse_method(path: &str) -> (String, String) {
+        let path = path.trim_start_matches('/');
+        let parts: Vec<&str> = path.split('/').collect();
+        if parts.len() == 2 {
+            (parts[0].to_string(), parts[1].to_string())
+        } else {
+            ("unknown".to_string(), "unknown".to_string())
+        }
+    }
+
+    fn parse_endpoint(config: &crate::options::ClientConfig) -> (String, Option<u16>, String) {
+        // The endpoint in config is typically "https://service.googleapis.com".
+        // We need to parse it to get the host and port.
+        // If parsing fails, we fallback to the raw string.
+        let endpoint = config.endpoint.as_deref().unwrap_or("unknown");
+        if let Ok(uri) = endpoint.parse::<http::Uri>() {
+            let host = uri.host().unwrap_or(endpoint).to_string();
+            let port = uri.port_u16().or_else(|| match uri.scheme_str() {
+                Some("https") => Some(443),
+                Some("http") => Some(80),
+                _ => None,
+            });
+            (host.clone(), port, host)
+        } else {
+            (endpoint.to_string(), None, endpoint.to_string())
+        }
+    }
+
+    fn create_span(&self) -> tracing::Span {
+        let span_name = format!("{}/{}", self.rpc_service, self.rpc_method);
+        tracing::info_span!(
+            "grpc.request",
+            "rpc.system" = "grpc",
+            "rpc.service" = %self.rpc_service,
+            "rpc.method" = %self.rpc_method,
+            "server.address" = %self.server_address,
+            "server.port" = self.server_port.map(|p| p as i64),
+            "url.domain" = %self.url_domain,
+            // Standard attributes that will be populated later
+            "rpc.grpc.status_code" = tracing::field::Empty,
+            "otel.status_code" = tracing::field::Empty,
+            "error.type" = tracing::field::Empty,
+        )
     }
 }

@@ -64,8 +64,7 @@ impl Client {
         default_endpoint: &str,
     ) -> gax::client_builder::Result<Self> {
         let credentials = Self::make_credentials(&config).await?;
-        let tracing_enabled = crate::options::tracing_enabled(&config);
-        let inner = Self::make_inner(config.endpoint, default_endpoint, tracing_enabled).await?;
+        let inner = Self::make_inner(&config, default_endpoint).await?;
         Ok(Self {
             inner,
             credentials,
@@ -253,18 +252,18 @@ impl Client {
     }
 
     async fn make_inner(
-        endpoint: Option<String>,
+        config: &crate::options::ClientConfig,
         default_endpoint: &str,
-        tracing_enabled: bool,
     ) -> gax::client_builder::Result<InnerClient> {
         use tonic::transport::{ClientTlsConfig, Endpoint};
 
         let origin =
-            crate::host::from_endpoint(endpoint.as_deref(), default_endpoint, |origin, _host| {
+            crate::host::from_endpoint(config.endpoint.as_deref(), default_endpoint, |origin, _host| {
                 origin
             })?;
+        let effective_endpoint = config.endpoint.clone().unwrap_or_else(|| default_endpoint.to_string());
         let endpoint =
-            Endpoint::from_shared(endpoint.unwrap_or_else(|| default_endpoint.to_string()))
+            Endpoint::from_shared(effective_endpoint.clone())
                 .map_err(BuilderError::transport)?
                 .tls_config(ClientTlsConfig::new().with_enabled_roots())
                 .map_err(BuilderError::transport)?
@@ -273,7 +272,6 @@ impl Client {
 
         #[cfg(not(google_cloud_unstable_tracing))]
         {
-            let _ = tracing_enabled;
             Ok(InnerClient::new(channel))
         }
 
@@ -283,8 +281,10 @@ impl Client {
             use tower::ServiceBuilder;
             use tower::util::Either;
 
-            if tracing_enabled {
-                let layer = TracingTowerLayer::new();
+            if crate::options::tracing_enabled(config) {
+                let mut layer_config = config.clone();
+                layer_config.endpoint = Some(effective_endpoint);
+                let layer = TracingTowerLayer::new(layer_config);
                 let service = ServiceBuilder::new().layer(layer).service(channel);
                 Ok(InnerClient::new(Either::Left(service)))
             } else {
