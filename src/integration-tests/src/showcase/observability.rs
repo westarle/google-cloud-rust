@@ -1,18 +1,37 @@
-#![cfg(google_cloud_unstable_tracing)]
+// Copyright 2025 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     https://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
-use integration_tests::observability::{otlp, tracing as obs_tracing};
-use sm::client::SecretManagerService;
+use crate::Result;
+use crate::observability::{otlp, tracing as obs_tracing};
+use showcase::client::Echo;
 use tracing_subscriber::{layer::SubscriberExt, Registry};
 use std::env;
 use opentelemetry::trace::TraceContextExt;
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
-#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-#[cfg(feature = "run-integration-tests")]
-async fn test_end_to_end_tracing() -> anyhow::Result<()> {
-    let project_id = env::var("GOOGLE_CLOUD_PROJECT")
-        .expect("GOOGLE_CLOUD_PROJECT must be set");
-    let service_name = "e2e-test-service";
+pub async fn run() -> Result<()> {
+    // Only run this test if the environment variable is set, otherwise skip it.
+    // This prevents failures in environments where we just want to run standard showcase tests.
+    let project_id = match env::var("GOOGLE_CLOUD_PROJECT") {
+        Ok(pid) => pid,
+        Err(_) => {
+            tracing::warn!("Skipping observability test: GOOGLE_CLOUD_PROJECT not set");
+            return Ok(());
+        }
+    };
+    
+    let service_name = "showcase-observability-test";
 
     // 1. Initialize OTLP Provider
     let provider = otlp::CloudTelemetryTracerProviderBuilder::new(&project_id, service_name)
@@ -22,51 +41,53 @@ async fn test_end_to_end_tracing() -> anyhow::Result<()> {
     // 2. Initialize Tracing Subscriber
     let layer = obs_tracing::layer(provider.clone());
     
-    // Add a fmt layer to see logs in stdout
+    // We don't need a fmt layer here as the parent `showcase::run` might have one,
+    // or we can rely on the parent's subscriber for logging if we compose them.
+    // However, `set_default` replaces the subscriber for the current thread.
+    // To keep seeing logs, we should probably include a fmt layer or try to compose with the parent.
+    // For simplicity in this test, we'll just use our own subscriber which includes the OTLP layer.
+    // We add a fmt layer to ensure we can still see what's happening.
     let fmt_layer = tracing_subscriber::fmt::layer()
         .with_test_writer();
-    
+
     let subscriber = Registry::default()
         .with(layer)
         .with(fmt_layer)
         .with(tracing_subscriber::EnvFilter::try_from_default_env()
             .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")));
     
-    // Use set_default to scope it to this test
+    // Use set_default to scope it to this function
     let _guard = tracing::subscriber::set_default(subscriber);
 
     // 3. Execute API call within a span
-    let root_span = tracing::info_span!("e2e_test_root_span");
+    let root_span = tracing::info_span!("showcase_observability_root_span");
     let _enter = root_span.enter();
 
     // Capture Trace ID
     let span = tracing::Span::current();
     let context = span.context();
     let trace_id = context.span().span_context().trace_id();
-    println!("Generated Trace ID: {}", trace_id);
+    tracing::info!("Generated Trace ID: {}", trace_id);
 
-    // Use explicit credentials to match previous working test
-    let scopes = ["https://www.googleapis.com/auth/cloud-platform"];
-    let credentials = auth::credentials::Builder::default()
-        .with_scopes(scopes)
-        .build()?;
-
-    let client = SecretManagerService::builder()
-        .with_credentials(credentials)
+    // Connect to local Showcase
+    let client = Echo::builder()
+        .with_endpoint("http://localhost:7469")
+        .with_credentials(auth::credentials::anonymous::Builder::new().build())
         .with_tracing()
         .build()
         .await?;
 
-    println!("Client built, sending request...");
+    tracing::info!("Sending Echo request...");
     let response = client
-        .list_secrets()
-        .set_parent(format!("projects/{}", project_id))
-        .set_page_size(1)
+        .echo()
+        .set_content("hello tracing")
         .send()
         .await;
-    println!("Request finished.");
+    tracing::info!("Request finished.");
 
-    assert!(response.is_ok(), "Failed to list secrets: {:?}", response.err());
+    if let Err(e) = response {
+        return Err(anyhow::anyhow!("Failed to echo: {:?}", e).into());
+    }
 
     // Drop span to ensure it ends
     drop(_enter);
@@ -106,7 +127,7 @@ async fn verify_trace_existence(project_id: &str, trace_id: &str) -> anyhow::Res
         project_id, trace_id
     );
 
-    println!("Polling Cloud Trace API: {}", url);
+    tracing::info!("Polling Cloud Trace API: {}", url);
 
     // Poll for a while
     for i in 0..20 {
@@ -125,7 +146,7 @@ async fn verify_trace_existence(project_id: &str, trace_id: &str) -> anyhow::Res
                     s.get("displayName")
                         .and_then(|n| n.get("value"))
                         .and_then(|v| v.as_str())
-                        .map(|s| s == "e2e_test_root_span")
+                        .map(|s| s == "showcase_observability_root_span")
                         .unwrap_or(false)
                 });
 
@@ -145,18 +166,14 @@ async fn verify_trace_existence(project_id: &str, trace_id: &str) -> anyhow::Res
                             .and_then(|n| n.get("value"))
                             .and_then(|v| v.as_str())
                             .unwrap_or("unknown");
-                        println!("Found trace with root span and child span: {}", name);
+                        tracing::info!("Found trace with root span and child span: {}", name);
                         return Ok(());
                     }
                 }
             }
-            println!("Trace found but incomplete (attempt {}). Retrying...", i);
+            tracing::info!("Trace found but incomplete (attempt {}). Retrying...", i);
         } else {
-            println!("Trace not found yet (attempt {}): status {}", i, resp.status());
-            if i == 19 {
-                 let body = resp.text().await?;
-                 println!("Last response body: {}", body);
-            }
+            tracing::info!("Trace not found yet (attempt {}): status {}", i, resp.status());
         }
         tokio::time::sleep(std::time::Duration::from_secs(5)).await;
     }
