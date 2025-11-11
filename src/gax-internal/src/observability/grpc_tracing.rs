@@ -27,13 +27,13 @@ use tracing::Instrument;
 /// to a gRPC client.
 #[derive(Clone, Debug, Default)]
 pub struct TracingTowerLayer {
-    config: crate::options::ClientConfig,
+    endpoint: String,
 }
 
 impl TracingTowerLayer {
     /// Creates a new `TracingTowerLayer`.
-    pub fn new(config: crate::options::ClientConfig) -> Self {
-        Self { config }
+    pub fn new(endpoint: String) -> Self {
+        Self { endpoint }
     }
 }
 
@@ -80,11 +80,7 @@ where
     }
 
     fn call(&mut self, req: http::Request<B>) -> Self::Future {
-        if !crate::options::tracing_enabled(&self.layer.config) {
-            return Box::pin(self.inner.call(req));
-        }
-
-        let span_info = GrpcSpanInfo::new(req.uri(), &self.layer.config);
+        let span_info = GrpcSpanInfo::new(req.uri(), &self.layer.endpoint);
         let span = span_info.create_span();
         Box::pin(self.inner.call(req).instrument(span))
     }
@@ -99,9 +95,9 @@ struct GrpcSpanInfo {
 }
 
 impl GrpcSpanInfo {
-    fn new(uri: &http::Uri, config: &crate::options::ClientConfig) -> Self {
+    fn new(uri: &http::Uri, endpoint: &str) -> Self {
         let (rpc_service, rpc_method) = Self::parse_method(uri.path());
-        let (server_address, server_port, url_domain) = Self::parse_endpoint(config);
+        let (server_address, server_port, url_domain) = Self::parse_endpoint(endpoint);
         Self {
             rpc_service,
             rpc_method,
@@ -121,11 +117,10 @@ impl GrpcSpanInfo {
         }
     }
 
-    fn parse_endpoint(config: &crate::options::ClientConfig) -> (String, Option<u16>, String) {
-        // The endpoint in config is typically "https://service.googleapis.com".
+    fn parse_endpoint(endpoint: &str) -> (String, Option<u16>, String) {
+        // The endpoint is typically "https://service.googleapis.com".
         // We need to parse it to get the host and port.
         // If parsing fails, we fallback to the raw string.
-        let endpoint = config.endpoint.as_deref().unwrap_or("unknown");
         if let Ok(uri) = endpoint.parse::<http::Uri>() {
             let host = uri.host().unwrap_or(endpoint).to_string();
             let port = uri.port_u16().or_else(|| match uri.scheme_str() {

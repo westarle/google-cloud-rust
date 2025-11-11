@@ -282,9 +282,7 @@ impl Client {
             use tower::util::Either;
 
             if crate::options::tracing_enabled(config) {
-                let mut layer_config = config.clone();
-                layer_config.endpoint = Some(effective_endpoint);
-                let layer = TracingTowerLayer::new(layer_config);
+                let layer = TracingTowerLayer::new(effective_endpoint);
                 let service = ServiceBuilder::new().layer(layer).service(channel);
                 Ok(InnerClient::new(Either::Left(service)))
             } else {
