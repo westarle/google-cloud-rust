@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::observability::attributes::keys;
+use opentelemetry_semantic_conventions as semconv;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
@@ -91,19 +93,19 @@ fn create_grpc_span(uri: &http::Uri, endpoint: &str) -> tracing::Span {
     let span_name = format!("{}/{}", rpc_service, rpc_method);
     tracing::info_span!(
         "grpc.request",
-        "otel.name" = %span_name,
-        "rpc.system" = "grpc",
-        "otel.kind" = "client",
-        "rpc.service" = %rpc_service,
-        "rpc.method" = %rpc_method,
-        "server.address" = %server_address,
-        "server.port" = server_port.map(|p| p as i64),
-        "url.domain" = %url_domain,
+        { keys::OTEL_NAME } = %span_name,
+        { semconv::trace::RPC_SYSTEM } = "grpc",
+        { keys::OTEL_KIND } = crate::observability::attributes::OTEL_KIND_CLIENT,
+        { semconv::trace::RPC_SERVICE } = %rpc_service,
+        { semconv::trace::RPC_METHOD } = %rpc_method,
+        { semconv::trace::SERVER_ADDRESS } = %server_address,
+        { semconv::trace::SERVER_PORT } = server_port.map(|p| p as i64),
+        { semconv::attribute::URL_DOMAIN } = %url_domain,
         // Standard attributes that will be populated later
-        "rpc.grpc.status_code" = tracing::field::Empty,
-        "grpc.status" = tracing::field::Empty,
-        "otel.status_code" = tracing::field::Empty,
-        "error.type" = tracing::field::Empty,
+        { semconv::attribute::RPC_GRPC_STATUS_CODE } = tracing::field::Empty,
+        { keys::GRPC_STATUS } = tracing::field::Empty,
+        { keys::OTEL_STATUS_CODE } = tracing::field::Empty,
+        { semconv::trace::ERROR_TYPE } = tracing::field::Empty,
     )
 }
 

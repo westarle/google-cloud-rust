@@ -71,7 +71,7 @@ mod tests {
         let span = &grpc_spans[0];
         assert_eq!(span.attributes.get("otel.name").and_then(|v| v.as_string()), Some("google.test.v1.EchoService/Echo".to_string()));
         assert_eq!(span.attributes.get("rpc.system").and_then(|v| v.as_string()), Some("grpc".to_string()));
-        assert_eq!(span.attributes.get("otel.kind").and_then(|v| v.as_string()), Some("client".to_string()));
+        assert_eq!(span.attributes.get("otel.kind").and_then(|v| v.as_string()), Some("Client".to_string()));
         assert_eq!(span.attributes.get("rpc.service").and_then(|v| v.as_string()), Some("google.test.v1.EchoService".to_string()));
         assert_eq!(span.attributes.get("rpc.method").and_then(|v| v.as_string()), Some("Echo".to_string()));
         
