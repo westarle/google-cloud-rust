@@ -88,8 +88,10 @@ where
 fn create_grpc_span(uri: &http::Uri, endpoint: &str) -> tracing::Span {
     let (rpc_service, rpc_method) = parse_method(uri.path());
     let (server_address, server_port, url_domain) = parse_endpoint(endpoint);
+    let span_name = format!("{}/{}", rpc_service, rpc_method);
     tracing::info_span!(
         "grpc.request",
+        "otel.name" = %span_name,
         "rpc.system" = "grpc",
         "otel.kind" = "client",
         "rpc.service" = %rpc_service,
