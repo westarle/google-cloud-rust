@@ -112,13 +112,17 @@ impl CloudTelemetryTracerProviderBuilder {
 
         let mut exporter_builder = opentelemetry_otlp::SpanExporter::builder()
             .with_tonic()
-            .with_endpoint(self.endpoint)
+            .with_endpoint(self.endpoint.clone())
             .with_interceptor(interceptor);
 
-        let tls_config = ClientTlsConfig::new()
-            .with_enabled_roots()
-            .domain_name(self.domain_name);
-        exporter_builder = exporter_builder.with_tls_config(tls_config);
+        // Only enable TLS if the endpoint is HTTPS.
+        // This allows using http://localhost for testing.
+        if self.endpoint.starts_with("https") {
+            let tls_config = ClientTlsConfig::new()
+                .with_enabled_roots()
+                .domain_name(self.domain_name);
+            exporter_builder = exporter_builder.with_tls_config(tls_config);
+        }
 
         let exporter = exporter_builder
             .build()
@@ -126,7 +130,7 @@ impl CloudTelemetryTracerProviderBuilder {
 
         let provider = SdkTracerProvider::builder()
             .with_resource(resource)
-            .with_batch_exporter(exporter)
+            .with_simple_exporter(exporter)
             .build();
 
         Ok(provider)
@@ -136,6 +140,16 @@ impl CloudTelemetryTracerProviderBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use opentelemetry::trace::{Tracer, TracerProvider as _};
+    use opentelemetry_proto_0_26::tonic::collector::trace::v1::{
+        trace_service_server::{TraceService, TraceServiceServer},
+        ExportTraceServiceRequest, ExportTraceServiceResponse,
+    };
+    use std::net::SocketAddr;
+    use tokio::sync::mpsc;
+    use tokio_stream::wrappers::TcpListenerStream;
+    use tonic_0_12 as tonic_server;
+    use tonic_server::transport::Server;
 
     #[tokio::test]
     async fn test_builder_configuration() {
@@ -154,5 +168,89 @@ mod tests {
         let debug_output = format!("{:?}", provider);
         assert!(debug_output.contains(project_id));
         assert!(debug_output.contains(service_name));
+    }
+
+    #[derive(Clone)]
+    struct MockTraceService {
+        tx: mpsc::Sender<(tonic_server::metadata::MetadataMap, ExportTraceServiceRequest)>,
+    }
+
+    #[tonic_server::async_trait]
+    impl TraceService for MockTraceService {
+        async fn export(
+            &self,
+            request: tonic_server::Request<ExportTraceServiceRequest>,
+        ) -> Result<tonic_server::Response<ExportTraceServiceResponse>, tonic_server::Status> {
+            let metadata = request.metadata().clone();
+            let inner = request.into_inner();
+            self.tx.send((metadata, inner)).await.unwrap();
+            Ok(tonic_server::Response::new(ExportTraceServiceResponse {
+                partial_success: None,
+            }))
+        }
+    }
+
+    #[derive(Debug)]
+    struct TestTokenProvider;
+    impl auth::credentials::CredentialsProvider for TestTokenProvider {
+        async fn headers(
+            &self,
+            _: http::Extensions,
+        ) -> Result<
+            auth::credentials::CacheableResource<http::HeaderMap>,
+            auth::errors::CredentialsError,
+        > {
+            let mut map = http::HeaderMap::new();
+            map.insert("authorization", "Bearer test-token".parse().unwrap());
+            map.insert("x-goog-user-project", "test-project".parse().unwrap());
+            Ok(auth::credentials::CacheableResource::New {
+                entity_tag: auth::credentials::EntityTag::new(),
+                data: map,
+            })
+        }
+        async fn universe_domain(&self) -> Option<String> {
+            None
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn test_otlp_export_with_mock_collector() {
+        let (tx, mut rx) = mpsc::channel(10);
+        let mock_service = MockTraceService { tx };
+
+        let addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
+        let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+        let local_addr = listener.local_addr().unwrap();
+
+        tokio::spawn(async move {
+            Server::builder()
+                .add_service(TraceServiceServer::new(mock_service))
+                .serve_with_incoming(TcpListenerStream::new(listener))
+                .await
+                .unwrap();
+        });
+
+        let credentials = Credentials::from(TestTokenProvider);
+
+        let provider = CloudTelemetryTracerProviderBuilder::new("test-project", "test-service")
+            .with_credentials(credentials)
+            .with_endpoint(format!("http://{}", local_addr))
+            .build()
+            .await
+            .expect("failed to build provider");
+
+        let tracer = provider.tracer("test-tracer");
+        tracer.start("test-span");
+
+        // Wait for credentials to be refreshed
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+        provider.force_flush().unwrap();
+
+        let (metadata, request) = rx.recv().await.expect("failed to receive request");
+
+        assert_eq!(metadata.get("authorization").unwrap(), "Bearer test-token");
+        assert_eq!(metadata.get("x-goog-user-project").unwrap(), "test-project");
+        assert!(!request.resource_spans.is_empty());
     }
 }
