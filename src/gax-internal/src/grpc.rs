@@ -64,7 +64,8 @@ impl Client {
         default_endpoint: &str,
     ) -> gax::client_builder::Result<Self> {
         let credentials = Self::make_credentials(&config).await?;
-        let inner = Self::make_inner(&config, default_endpoint).await?;
+        let tracing_enabled = crate::options::tracing_enabled(&config);
+        let inner = Self::make_inner(config.endpoint.clone(), default_endpoint, tracing_enabled).await?;
         Ok(Self {
             inner,
             credentials,
@@ -252,16 +253,17 @@ impl Client {
     }
 
     async fn make_inner(
-        config: &crate::options::ClientConfig,
+        endpoint: Option<String>,
         default_endpoint: &str,
+        tracing_enabled: bool,
     ) -> gax::client_builder::Result<InnerClient> {
         use tonic::transport::{ClientTlsConfig, Endpoint};
 
         let origin =
-            crate::host::from_endpoint(config.endpoint.as_deref(), default_endpoint, |origin, _host| {
+            crate::host::from_endpoint(endpoint.as_deref(), default_endpoint, |origin, _host| {
                 origin
             })?;
-        let effective_endpoint = config.endpoint.clone().unwrap_or_else(|| default_endpoint.to_string());
+        let effective_endpoint = endpoint.unwrap_or_else(|| default_endpoint.to_string());
         let endpoint =
             Endpoint::from_shared(effective_endpoint.clone())
                 .map_err(BuilderError::transport)?
@@ -272,6 +274,7 @@ impl Client {
 
         #[cfg(not(google_cloud_unstable_tracing))]
         {
+            let _ = tracing_enabled;
             Ok(InnerClient::new(channel))
         }
 
@@ -281,7 +284,7 @@ impl Client {
             use tower::ServiceBuilder;
             use tower::util::Either;
 
-            if crate::options::tracing_enabled(config) {
+            if tracing_enabled {
                 let layer = TracingTowerLayer::new(effective_endpoint);
                 let service = ServiceBuilder::new().layer(layer).service(channel);
                 Ok(InnerClient::new(Either::Left(service)))
