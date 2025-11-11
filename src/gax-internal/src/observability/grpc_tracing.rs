@@ -80,74 +80,52 @@ where
     }
 
     fn call(&mut self, req: http::Request<B>) -> Self::Future {
-        let span_info = GrpcSpanInfo::new(req.uri(), &self.layer.endpoint);
-        let span = span_info.create_span();
+        let span = create_grpc_span(req.uri(), &self.layer.endpoint);
         Box::pin(self.inner.call(req).instrument(span))
     }
 }
 
-struct GrpcSpanInfo {
-    rpc_service: String,
-    rpc_method: String,
-    server_address: String,
-    server_port: Option<u16>,
-    url_domain: String,
+fn create_grpc_span(uri: &http::Uri, endpoint: &str) -> tracing::Span {
+    let (rpc_service, rpc_method) = parse_method(uri.path());
+    let (server_address, server_port, url_domain) = parse_endpoint(endpoint);
+    tracing::info_span!(
+        "grpc.request",
+        "rpc.system" = "grpc",
+        "rpc.service" = %rpc_service,
+        "rpc.method" = %rpc_method,
+        "server.address" = %server_address,
+        "server.port" = server_port.map(|p| p as i64),
+        "url.domain" = %url_domain,
+        // Standard attributes that will be populated later
+        "rpc.grpc.status_code" = tracing::field::Empty,
+        "otel.status_code" = tracing::field::Empty,
+        "error.type" = tracing::field::Empty,
+    )
 }
 
-impl GrpcSpanInfo {
-    fn new(uri: &http::Uri, endpoint: &str) -> Self {
-        let (rpc_service, rpc_method) = Self::parse_method(uri.path());
-        let (server_address, server_port, url_domain) = Self::parse_endpoint(endpoint);
-        Self {
-            rpc_service,
-            rpc_method,
-            server_address,
-            server_port,
-            url_domain,
-        }
+fn parse_method(path: &str) -> (String, String) {
+    let path = path.trim_start_matches('/');
+    let parts: Vec<&str> = path.split('/').collect();
+    if parts.len() == 2 {
+        (parts[0].to_string(), parts[1].to_string())
+    } else {
+        ("unknown".to_string(), "unknown".to_string())
     }
+}
 
-    fn parse_method(path: &str) -> (String, String) {
-        let path = path.trim_start_matches('/');
-        let parts: Vec<&str> = path.split('/').collect();
-        if parts.len() == 2 {
-            (parts[0].to_string(), parts[1].to_string())
-        } else {
-            ("unknown".to_string(), "unknown".to_string())
-        }
-    }
-
-    fn parse_endpoint(endpoint: &str) -> (String, Option<u16>, String) {
-        // The endpoint is typically "https://service.googleapis.com".
-        // We need to parse it to get the host and port.
-        // If parsing fails, we fallback to the raw string.
-        if let Ok(uri) = endpoint.parse::<http::Uri>() {
-            let host = uri.host().unwrap_or(endpoint).to_string();
-            let port = uri.port_u16().or_else(|| match uri.scheme_str() {
-                Some("https") => Some(443),
-                Some("http") => Some(80),
-                _ => None,
-            });
-            (host.clone(), port, host)
-        } else {
-            (endpoint.to_string(), None, endpoint.to_string())
-        }
-    }
-
-    fn create_span(&self) -> tracing::Span {
-        let span_name = format!("{}/{}", self.rpc_service, self.rpc_method);
-        tracing::info_span!(
-            "grpc.request",
-            "rpc.system" = "grpc",
-            "rpc.service" = %self.rpc_service,
-            "rpc.method" = %self.rpc_method,
-            "server.address" = %self.server_address,
-            "server.port" = self.server_port.map(|p| p as i64),
-            "url.domain" = %self.url_domain,
-            // Standard attributes that will be populated later
-            "rpc.grpc.status_code" = tracing::field::Empty,
-            "otel.status_code" = tracing::field::Empty,
-            "error.type" = tracing::field::Empty,
-        )
+fn parse_endpoint(endpoint: &str) -> (String, Option<u16>, String) {
+    // The endpoint is typically "https://service.googleapis.com".
+    // We need to parse it to get the host and port.
+    // If parsing fails, we fallback to the raw string.
+    if let Ok(uri) = endpoint.parse::<http::Uri>() {
+        let host = uri.host().unwrap_or(endpoint).to_string();
+        let port = uri.port_u16().or_else(|| match uri.scheme_str() {
+            Some("https") => Some(443),
+            Some("http") => Some(80),
+            _ => None,
+        });
+        (host.clone(), port, host)
+    } else {
+        (endpoint.to_string(), None, endpoint.to_string())
     }
 }
