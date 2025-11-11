@@ -91,6 +91,7 @@ fn create_grpc_span(uri: &http::Uri, endpoint: &str) -> tracing::Span {
     tracing::info_span!(
         "grpc.request",
         "rpc.system" = "grpc",
+        "otel.kind" = "client",
         "rpc.service" = %rpc_service,
         "rpc.method" = %rpc_method,
         "server.address" = %server_address,
@@ -98,6 +99,7 @@ fn create_grpc_span(uri: &http::Uri, endpoint: &str) -> tracing::Span {
         "url.domain" = %url_domain,
         // Standard attributes that will be populated later
         "rpc.grpc.status_code" = tracing::field::Empty,
+        "grpc.status" = tracing::field::Empty,
         "otel.status_code" = tracing::field::Empty,
         "error.type" = tracing::field::Empty,
     )

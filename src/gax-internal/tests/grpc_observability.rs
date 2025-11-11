@@ -70,6 +70,7 @@ mod tests {
         
         let span = &grpc_spans[0];
         assert_eq!(span.attributes.get("rpc.system").and_then(|v| v.as_string()), Some("grpc".to_string()));
+        assert_eq!(span.attributes.get("otel.kind").and_then(|v| v.as_string()), Some("client".to_string()));
         assert_eq!(span.attributes.get("rpc.service").and_then(|v| v.as_string()), Some("google.test.v1.EchoService".to_string()));
         assert_eq!(span.attributes.get("rpc.method").and_then(|v| v.as_string()), Some("Echo".to_string()));
         
@@ -80,6 +81,13 @@ mod tests {
         assert!(span.attributes.contains_key("server.port"));
         assert_eq!(span.attributes.get("url.domain").and_then(|v| v.as_string()), Some(address));
 
+        // Check placeholders exist (though they might be None/Empty in the captured span if not set)
+        // Note: tracing-subscriber's test layer might not capture Empty fields unless recorded.
+        // But we want to ensure they are defined in the span macro.
+        // Since we can't easily check "defined but empty" with this test layer if it ignores them,
+        // we assume the code change covers it.
+        // But we can check if we set them to something later.
+        
         Ok(())
     }
 
