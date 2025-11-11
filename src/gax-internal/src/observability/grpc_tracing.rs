@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::observability::attributes::keys;
-use opentelemetry_semantic_conventions as semconv;
+use crate::observability::attributes::keys::*;
+use opentelemetry_semantic_conventions::{attribute as otel_attr, trace as otel_trace};
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
@@ -93,19 +93,19 @@ fn create_grpc_span(uri: &http::Uri, endpoint: &str) -> tracing::Span {
     let span_name = format!("{}/{}", rpc_service, rpc_method);
     tracing::info_span!(
         "grpc.request",
-        { keys::OTEL_NAME } = %span_name,
-        { semconv::trace::RPC_SYSTEM } = "grpc",
-        { keys::OTEL_KIND } = crate::observability::attributes::OTEL_KIND_CLIENT,
-        { semconv::trace::RPC_SERVICE } = %rpc_service,
-        { semconv::trace::RPC_METHOD } = %rpc_method,
-        { semconv::trace::SERVER_ADDRESS } = %server_address,
-        { semconv::trace::SERVER_PORT } = server_port.map(|p| p as i64),
-        { semconv::attribute::URL_DOMAIN } = %url_domain,
+        { OTEL_NAME } = %span_name,
+        { otel_trace::RPC_SYSTEM } = "grpc",
+        { OTEL_KIND } = crate::observability::attributes::OTEL_KIND_CLIENT,
+        { otel_trace::RPC_SERVICE } = %rpc_service,
+        { otel_trace::RPC_METHOD } = %rpc_method,
+        { otel_trace::SERVER_ADDRESS } = %server_address,
+        { otel_trace::SERVER_PORT } = server_port.map(|p| p as i64),
+        { otel_attr::URL_DOMAIN } = %url_domain,
         // Standard attributes that will be populated later
-        { semconv::attribute::RPC_GRPC_STATUS_CODE } = tracing::field::Empty,
-        { keys::GRPC_STATUS } = tracing::field::Empty,
-        { keys::OTEL_STATUS_CODE } = tracing::field::Empty,
-        { semconv::trace::ERROR_TYPE } = tracing::field::Empty,
+        { otel_attr::RPC_GRPC_STATUS_CODE } = tracing::field::Empty,
+        { GRPC_STATUS } = tracing::field::Empty,
+        { OTEL_STATUS_CODE } = tracing::field::Empty,
+        { otel_trace::ERROR_TYPE } = tracing::field::Empty,
     )
 }
 
@@ -133,5 +133,91 @@ fn parse_endpoint(endpoint: &str) -> (String, Option<u16>, String) {
         (host.clone(), port, host)
     } else {
         (endpoint.to_string(), None, endpoint.to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use google_cloud_test_utils::test_layer::{AttributeValue, TestLayer};
+    use std::collections::HashMap;
+
+    #[test]
+    fn test_parse_method() {
+        assert_eq!(
+            parse_method("/google.pubsub.v1.Publisher/Publish"),
+            (
+                "google.pubsub.v1.Publisher".to_string(),
+                "Publish".to_string()
+            )
+        );
+        assert_eq!(
+            parse_method("google.pubsub.v1.Publisher/Publish"),
+            (
+                "google.pubsub.v1.Publisher".to_string(),
+                "Publish".to_string()
+            )
+        );
+        assert_eq!(
+            parse_method("/invalid/path/format"),
+            ("unknown".to_string(), "unknown".to_string())
+        );
+        assert_eq!(
+            parse_method("invalid"),
+            ("unknown".to_string(), "unknown".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parse_endpoint() {
+        assert_eq!(
+            parse_endpoint("https://pubsub.googleapis.com"),
+            ("pubsub.googleapis.com".to_string(), Some(443), "pubsub.googleapis.com".to_string())
+        );
+        assert_eq!(
+            parse_endpoint("http://localhost:8080"),
+            ("localhost".to_string(), Some(8080), "localhost".to_string())
+        );
+        assert_eq!(
+            parse_endpoint("http://127.0.0.1:9090"),
+            ("127.0.0.1".to_string(), Some(9090), "127.0.0.1".to_string())
+        );
+        assert_eq!(
+            parse_endpoint("pubsub.googleapis.com"), // No scheme, might fail parsing or return as is
+            ("pubsub.googleapis.com".to_string(), None, "pubsub.googleapis.com".to_string())
+        );
+        assert_eq!(
+            parse_endpoint("invalid uri"), 
+            ("invalid uri".to_string(), None, "invalid uri".to_string())
+        );
+    }
+
+    #[test]
+    fn test_create_grpc_span() {
+        let guard = TestLayer::initialize();
+        let uri = http::Uri::from_static("https://pubsub.googleapis.com/google.pubsub.v1.Publisher/Publish");
+        let endpoint = "https://pubsub.googleapis.com";
+        let _span = create_grpc_span(&uri, endpoint);
+
+        let captured = TestLayer::capture(&guard);
+        assert_eq!(captured.len(), 1);
+        let span = &captured[0];
+        assert_eq!(span.name, "grpc.request");
+
+        let expected_attributes: HashMap<String, AttributeValue> = [
+            (OTEL_NAME, "google.pubsub.v1.Publisher/Publish".into()),
+            (otel_trace::RPC_SYSTEM, "grpc".into()),
+            (OTEL_KIND, "Client".into()),
+            (otel_trace::RPC_SERVICE, "google.pubsub.v1.Publisher".into()),
+            (otel_trace::RPC_METHOD, "Publish".into()),
+            (otel_trace::SERVER_ADDRESS, "pubsub.googleapis.com".into()),
+            (otel_trace::SERVER_PORT, 443_i64.into()),
+            (otel_attr::URL_DOMAIN, "pubsub.googleapis.com".into()),
+        ]
+        .into_iter()
+        .map(|(k, v)| (k.to_string(), v))
+        .collect();
+
+        assert_eq!(span.attributes, expected_attributes);
     }
 }
