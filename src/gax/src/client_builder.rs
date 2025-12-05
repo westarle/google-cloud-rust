@@ -424,6 +424,7 @@ pub mod internal {
         pub polling_error_policy: Option<Arc<dyn PollingErrorPolicy>>,
         pub polling_backoff_policy: Option<Arc<dyn PollingBackoffPolicy>>,
         pub disable_automatic_decompression: bool,
+        pub disable_follow_redirects: bool,
     }
 
     impl<Cr> std::default::Default for ClientConfig<Cr> {
@@ -440,6 +441,7 @@ pub mod internal {
                 polling_error_policy: None,
                 polling_backoff_policy: None,
                 disable_automatic_decompression: false,
+                disable_follow_redirects: false,
             }
         }
     }
@@ -454,6 +456,19 @@ pub mod internal {
         v: bool,
     ) -> super::ClientBuilder<F, Cr> {
         builder.config.disable_automatic_decompression = !v;
+        builder
+    }
+
+    /// Configure HTTP redirects.
+    ///
+    /// By default, the client libraries automatically follow HTTP redirects.
+    /// Internal users can disable this behavior if they need to handle redirects
+    /// manually (e.g. for 308 Resume Incomplete).
+    pub fn with_follow_redirects<F, Cr>(
+        mut builder: super::ClientBuilder<F, Cr>,
+        v: bool,
+    ) -> super::ClientBuilder<F, Cr> {
+        builder.config.disable_follow_redirects = !v;
         builder
     }
 }
