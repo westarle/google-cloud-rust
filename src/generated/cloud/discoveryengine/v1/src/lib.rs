@@ -16,8 +16,6 @@
 
 //! Google Cloud Client Libraries for Rust - Discovery Engine API
 //!
-//!
-//!
 //! **WARNING:** some RPCs have no corresponding Rust function to call them.
 //! Typically these are streaming RPCs. We expect adding these RPCs in a
 //! way that does not break the existing APIs or changes their behavior in a
@@ -25,17 +23,14 @@
 //! will be required. If you need these RPCs please open an issue in our
 //! GitHub repository.
 //!
-//!
 //! This crate contains traits, types, and functions to interact with Discovery Engine API
 //! Most applications will use the structs defined in the [client] module.
-//!
 //!
 //! The client library types and functions are stable and not expected to change.
 //! Please note that Google Cloud services do change from time to time. The client
 //! libraries are designed to preserve backwards compatibility when the service
 //! changes in compatible ways. For example, adding RPCs, or fields to messages
 //! should not introduce breaking changes to the client libraries.
-//!
 //!
 //! # Available Clients
 //!
@@ -62,6 +57,7 @@
 //! * [UserLicenseService](client/struct.UserLicenseService.html)
 
 #![cfg_attr(docsrs, feature(doc_cfg))]
+
 #![allow(deprecated)]
 
 /// The messages and enums that are part of this client library.
@@ -88,65 +84,8 @@ pub(crate) mod tracing;
 pub(crate) mod transport;
 
 /// The default host used by the service.
-#[cfg(any(
-    feature = "assistant-service",
-    feature = "cmek-config-service",
-    feature = "completion-service",
-    feature = "control-service",
-    feature = "conversational-search-service",
-    feature = "data-store-service",
-    feature = "document-service",
-    feature = "engine-service",
-    feature = "grounded-generation-service",
-    feature = "identity-mapping-store-service",
-    feature = "project-service",
-    feature = "rank-service",
-    feature = "recommendation-service",
-    feature = "schema-service",
-    feature = "search-service",
-    feature = "search-tuning-service",
-    feature = "serving-config-service",
-    feature = "session-service",
-    feature = "site-search-engine-service",
-    feature = "user-event-service",
-    feature = "user-license-service",
-))]
+#[cfg(any(feature = "assistant-service",feature = "cmek-config-service",feature = "completion-service",feature = "control-service",feature = "conversational-search-service",feature = "data-store-service",feature = "document-service",feature = "engine-service",feature = "grounded-generation-service",feature = "identity-mapping-store-service",feature = "project-service",feature = "rank-service",feature = "recommendation-service",feature = "schema-service",feature = "search-service",feature = "search-tuning-service",feature = "serving-config-service",feature = "session-service",feature = "site-search-engine-service",feature = "user-event-service",feature = "user-license-service",))]
 const DEFAULT_HOST: &str = "https://discoveryengine.googleapis.com/";
 
-#[cfg(any(
-    feature = "assistant-service",
-    feature = "cmek-config-service",
-    feature = "completion-service",
-    feature = "control-service",
-    feature = "conversational-search-service",
-    feature = "data-store-service",
-    feature = "document-service",
-    feature = "engine-service",
-    feature = "grounded-generation-service",
-    feature = "identity-mapping-store-service",
-    feature = "project-service",
-    feature = "rank-service",
-    feature = "recommendation-service",
-    feature = "schema-service",
-    feature = "search-service",
-    feature = "search-tuning-service",
-    feature = "serving-config-service",
-    feature = "session-service",
-    feature = "site-search-engine-service",
-    feature = "user-event-service",
-    feature = "user-license-service",
-))]
-pub(crate) mod info {
-    const NAME: &str = env!("CARGO_PKG_NAME");
-    const VERSION: &str = env!("CARGO_PKG_VERSION");
-    lazy_static::lazy_static! {
-        pub(crate) static ref X_GOOG_API_CLIENT_HEADER: String = {
-            let ac = gaxi::api_header::XGoogApiClient{
-                name:          NAME,
-                version:       VERSION,
-                library_type:  gaxi::api_header::GAPIC,
-            };
-            ac.rest_header_value()
-        };
-    }
-}
+
+

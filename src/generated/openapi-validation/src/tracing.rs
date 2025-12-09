@@ -18,25 +18,46 @@ use crate::Result;
 /// Implements a [SecretManagerService](super::stub::SecretManagerService) decorator for logging and tracing.
 #[derive(Clone, Debug)]
 pub struct SecretManagerService<T>
-where
-    T: super::stub::SecretManagerService + std::fmt::Debug + Send + Sync,
-{
+where T: super::stub::SecretManagerService + std::fmt::Debug + Send + Sync {
     inner: T,
 }
 
 impl<T> SecretManagerService<T>
-where
-    T: super::stub::SecretManagerService + std::fmt::Debug + Send + Sync,
-{
+where T: super::stub::SecretManagerService + std::fmt::Debug + Send + Sync {
     pub fn new(inner: T) -> Self {
         Self { inner }
     }
 }
 
 impl<T> super::stub::SecretManagerService for SecretManagerService<T>
-where
-    T: super::stub::SecretManagerService + std::fmt::Debug + Send + Sync,
-{
+where T: super::stub::SecretManagerService + std::fmt::Debug + Send + Sync {
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn list_locations(
+        &self,
+        req: crate::model::secret_manager_service::ListLocationsRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::ListLocationsResponse>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "SecretManagerService",
+            "::list_locations"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "list_locations",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
+
+        let result = self.inner.list_locations(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn list_locations(
         &self,
@@ -45,7 +66,33 @@ where
     ) -> Result<gax::response::Response<crate::model::ListLocationsResponse>> {
         self.inner.list_locations(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn get_location(
+        &self,
+        req: crate::model::secret_manager_service::GetLocationRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::Location>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "SecretManagerService",
+            "::get_location"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "get_location",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.get_location(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn get_location(
         &self,
@@ -54,7 +101,33 @@ where
     ) -> Result<gax::response::Response<crate::model::Location>> {
         self.inner.get_location(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn list_secrets(
+        &self,
+        req: crate::model::secret_manager_service::ListSecretsRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::ListSecretsResponse>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "SecretManagerService",
+            "::list_secrets"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "list_secrets",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.list_secrets(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn list_secrets(
         &self,
@@ -63,7 +136,33 @@ where
     ) -> Result<gax::response::Response<crate::model::ListSecretsResponse>> {
         self.inner.list_secrets(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn create_secret(
+        &self,
+        req: crate::model::secret_manager_service::CreateSecretRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::Secret>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "SecretManagerService",
+            "::create_secret"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "create_secret",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.create_secret(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn create_secret(
         &self,
@@ -72,29 +171,103 @@ where
     ) -> Result<gax::response::Response<crate::model::Secret>> {
         self.inner.create_secret(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn list_secrets_by_project_and_location(
+        &self,
+        req: crate::model::secret_manager_service::ListSecretsByProjectAndLocationRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::ListSecretsResponse>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "SecretManagerService",
+            "::list_secrets_by_project_and_location"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "list_secrets_by_project_and_location",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.list_secrets_by_project_and_location(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn list_secrets_by_project_and_location(
         &self,
         req: crate::model::secret_manager_service::ListSecretsByProjectAndLocationRequest,
         options: gax::options::RequestOptions,
     ) -> Result<gax::response::Response<crate::model::ListSecretsResponse>> {
-        self.inner
-            .list_secrets_by_project_and_location(req, options)
-            .await
+        self.inner.list_secrets_by_project_and_location(req, options).await
+    }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn create_secret_by_project_and_location(
+        &self,
+        req: crate::model::secret_manager_service::CreateSecretByProjectAndLocationRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::Secret>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "SecretManagerService",
+            "::create_secret_by_project_and_location"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "create_secret_by_project_and_location",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
+
+        let result = self.inner.create_secret_by_project_and_location(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
     }
 
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn create_secret_by_project_and_location(
         &self,
         req: crate::model::secret_manager_service::CreateSecretByProjectAndLocationRequest,
         options: gax::options::RequestOptions,
     ) -> Result<gax::response::Response<crate::model::Secret>> {
-        self.inner
-            .create_secret_by_project_and_location(req, options)
-            .await
+        self.inner.create_secret_by_project_and_location(req, options).await
+    }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn add_secret_version(
+        &self,
+        req: crate::model::secret_manager_service::AddSecretVersionRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::SecretVersion>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "SecretManagerService",
+            "::add_secret_version"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "add_secret_version",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
+
+        let result = self.inner.add_secret_version(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
     }
 
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn add_secret_version(
         &self,
@@ -103,18 +276,68 @@ where
     ) -> Result<gax::response::Response<crate::model::SecretVersion>> {
         self.inner.add_secret_version(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn add_secret_version_by_project_and_location_and_secret(
+        &self,
+        req: crate::model::secret_manager_service::AddSecretVersionByProjectAndLocationAndSecretRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::SecretVersion>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "SecretManagerService",
+            "::add_secret_version_by_project_and_location_and_secret"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "add_secret_version_by_project_and_location_and_secret",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.add_secret_version_by_project_and_location_and_secret(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn add_secret_version_by_project_and_location_and_secret(
         &self,
         req: crate::model::secret_manager_service::AddSecretVersionByProjectAndLocationAndSecretRequest,
         options: gax::options::RequestOptions,
     ) -> Result<gax::response::Response<crate::model::SecretVersion>> {
-        self.inner
-            .add_secret_version_by_project_and_location_and_secret(req, options)
-            .await
+        self.inner.add_secret_version_by_project_and_location_and_secret(req, options).await
+    }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn get_secret(
+        &self,
+        req: crate::model::secret_manager_service::GetSecretRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::Secret>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "SecretManagerService",
+            "::get_secret"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "get_secret",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
+
+        let result = self.inner.get_secret(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
     }
 
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn get_secret(
         &self,
@@ -123,7 +346,33 @@ where
     ) -> Result<gax::response::Response<crate::model::Secret>> {
         self.inner.get_secret(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn delete_secret(
+        &self,
+        req: crate::model::secret_manager_service::DeleteSecretRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::Empty>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "SecretManagerService",
+            "::delete_secret"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "delete_secret",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.delete_secret(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn delete_secret(
         &self,
@@ -132,7 +381,33 @@ where
     ) -> Result<gax::response::Response<crate::model::Empty>> {
         self.inner.delete_secret(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn update_secret(
+        &self,
+        req: crate::model::secret_manager_service::UpdateSecretRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::Secret>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "SecretManagerService",
+            "::update_secret"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "update_secret",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.update_secret(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn update_secret(
         &self,
@@ -141,40 +416,138 @@ where
     ) -> Result<gax::response::Response<crate::model::Secret>> {
         self.inner.update_secret(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn get_secret_by_project_and_location_and_secret(
+        &self,
+        req: crate::model::secret_manager_service::GetSecretByProjectAndLocationAndSecretRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::Secret>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "SecretManagerService",
+            "::get_secret_by_project_and_location_and_secret"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "get_secret_by_project_and_location_and_secret",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.get_secret_by_project_and_location_and_secret(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn get_secret_by_project_and_location_and_secret(
         &self,
         req: crate::model::secret_manager_service::GetSecretByProjectAndLocationAndSecretRequest,
         options: gax::options::RequestOptions,
     ) -> Result<gax::response::Response<crate::model::Secret>> {
-        self.inner
-            .get_secret_by_project_and_location_and_secret(req, options)
-            .await
+        self.inner.get_secret_by_project_and_location_and_secret(req, options).await
+    }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn delete_secret_by_project_and_location_and_secret(
+        &self,
+        req: crate::model::secret_manager_service::DeleteSecretByProjectAndLocationAndSecretRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::Empty>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "SecretManagerService",
+            "::delete_secret_by_project_and_location_and_secret"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "delete_secret_by_project_and_location_and_secret",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
+
+        let result = self.inner.delete_secret_by_project_and_location_and_secret(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
     }
 
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn delete_secret_by_project_and_location_and_secret(
         &self,
         req: crate::model::secret_manager_service::DeleteSecretByProjectAndLocationAndSecretRequest,
         options: gax::options::RequestOptions,
     ) -> Result<gax::response::Response<crate::model::Empty>> {
-        self.inner
-            .delete_secret_by_project_and_location_and_secret(req, options)
-            .await
+        self.inner.delete_secret_by_project_and_location_and_secret(req, options).await
+    }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn update_secret_by_project_and_location_and_secret(
+        &self,
+        req: crate::model::secret_manager_service::UpdateSecretByProjectAndLocationAndSecretRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::Secret>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "SecretManagerService",
+            "::update_secret_by_project_and_location_and_secret"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "update_secret_by_project_and_location_and_secret",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
+
+        let result = self.inner.update_secret_by_project_and_location_and_secret(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
     }
 
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn update_secret_by_project_and_location_and_secret(
         &self,
         req: crate::model::secret_manager_service::UpdateSecretByProjectAndLocationAndSecretRequest,
         options: gax::options::RequestOptions,
     ) -> Result<gax::response::Response<crate::model::Secret>> {
-        self.inner
-            .update_secret_by_project_and_location_and_secret(req, options)
-            .await
+        self.inner.update_secret_by_project_and_location_and_secret(req, options).await
+    }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn list_secret_versions(
+        &self,
+        req: crate::model::secret_manager_service::ListSecretVersionsRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::ListSecretVersionsResponse>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "SecretManagerService",
+            "::list_secret_versions"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "list_secret_versions",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
+
+        let result = self.inner.list_secret_versions(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
     }
 
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn list_secret_versions(
         &self,
@@ -183,18 +556,68 @@ where
     ) -> Result<gax::response::Response<crate::model::ListSecretVersionsResponse>> {
         self.inner.list_secret_versions(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn list_secret_versions_by_project_and_location_and_secret(
+        &self,
+        req: crate::model::secret_manager_service::ListSecretVersionsByProjectAndLocationAndSecretRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::ListSecretVersionsResponse>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "SecretManagerService",
+            "::list_secret_versions_by_project_and_location_and_secret"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "list_secret_versions_by_project_and_location_and_secret",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.list_secret_versions_by_project_and_location_and_secret(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn list_secret_versions_by_project_and_location_and_secret(
         &self,
         req: crate::model::secret_manager_service::ListSecretVersionsByProjectAndLocationAndSecretRequest,
         options: gax::options::RequestOptions,
     ) -> Result<gax::response::Response<crate::model::ListSecretVersionsResponse>> {
-        self.inner
-            .list_secret_versions_by_project_and_location_and_secret(req, options)
-            .await
+        self.inner.list_secret_versions_by_project_and_location_and_secret(req, options).await
+    }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn get_secret_version(
+        &self,
+        req: crate::model::secret_manager_service::GetSecretVersionRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::SecretVersion>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "SecretManagerService",
+            "::get_secret_version"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "get_secret_version",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
+
+        let result = self.inner.get_secret_version(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
     }
 
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn get_secret_version(
         &self,
@@ -203,18 +626,68 @@ where
     ) -> Result<gax::response::Response<crate::model::SecretVersion>> {
         self.inner.get_secret_version(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn get_secret_version_by_project_and_location_and_secret_and_version(
+        &self,
+        req: crate::model::secret_manager_service::GetSecretVersionByProjectAndLocationAndSecretAndVersionRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::SecretVersion>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "SecretManagerService",
+            "::get_secret_version_by_project_and_location_and_secret_and_version"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "get_secret_version_by_project_and_location_and_secret_and_version",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.get_secret_version_by_project_and_location_and_secret_and_version(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn get_secret_version_by_project_and_location_and_secret_and_version(
         &self,
         req: crate::model::secret_manager_service::GetSecretVersionByProjectAndLocationAndSecretAndVersionRequest,
         options: gax::options::RequestOptions,
     ) -> Result<gax::response::Response<crate::model::SecretVersion>> {
-        self.inner
-            .get_secret_version_by_project_and_location_and_secret_and_version(req, options)
-            .await
+        self.inner.get_secret_version_by_project_and_location_and_secret_and_version(req, options).await
+    }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn access_secret_version(
+        &self,
+        req: crate::model::secret_manager_service::AccessSecretVersionRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::AccessSecretVersionResponse>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "SecretManagerService",
+            "::access_secret_version"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "access_secret_version",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
+
+        let result = self.inner.access_secret_version(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
     }
 
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn access_secret_version(
         &self,
@@ -223,18 +696,68 @@ where
     ) -> Result<gax::response::Response<crate::model::AccessSecretVersionResponse>> {
         self.inner.access_secret_version(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn access_secret_version_by_project_and_location_and_secret_and_version(
+        &self,
+        req: crate::model::secret_manager_service::AccessSecretVersionByProjectAndLocationAndSecretAndVersionRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::AccessSecretVersionResponse>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "SecretManagerService",
+            "::access_secret_version_by_project_and_location_and_secret_and_version"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "access_secret_version_by_project_and_location_and_secret_and_version",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.access_secret_version_by_project_and_location_and_secret_and_version(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn access_secret_version_by_project_and_location_and_secret_and_version(
         &self,
         req: crate::model::secret_manager_service::AccessSecretVersionByProjectAndLocationAndSecretAndVersionRequest,
         options: gax::options::RequestOptions,
     ) -> Result<gax::response::Response<crate::model::AccessSecretVersionResponse>> {
-        self.inner
-            .access_secret_version_by_project_and_location_and_secret_and_version(req, options)
-            .await
+        self.inner.access_secret_version_by_project_and_location_and_secret_and_version(req, options).await
+    }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn disable_secret_version(
+        &self,
+        req: crate::model::secret_manager_service::DisableSecretVersionRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::SecretVersion>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "SecretManagerService",
+            "::disable_secret_version"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "disable_secret_version",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
+
+        let result = self.inner.disable_secret_version(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
     }
 
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn disable_secret_version(
         &self,
@@ -243,18 +766,68 @@ where
     ) -> Result<gax::response::Response<crate::model::SecretVersion>> {
         self.inner.disable_secret_version(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn disable_secret_version_by_project_and_location_and_secret_and_version(
+        &self,
+        req: crate::model::secret_manager_service::DisableSecretVersionByProjectAndLocationAndSecretAndVersionRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::SecretVersion>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "SecretManagerService",
+            "::disable_secret_version_by_project_and_location_and_secret_and_version"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "disable_secret_version_by_project_and_location_and_secret_and_version",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.disable_secret_version_by_project_and_location_and_secret_and_version(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn disable_secret_version_by_project_and_location_and_secret_and_version(
         &self,
         req: crate::model::secret_manager_service::DisableSecretVersionByProjectAndLocationAndSecretAndVersionRequest,
         options: gax::options::RequestOptions,
     ) -> Result<gax::response::Response<crate::model::SecretVersion>> {
-        self.inner
-            .disable_secret_version_by_project_and_location_and_secret_and_version(req, options)
-            .await
+        self.inner.disable_secret_version_by_project_and_location_and_secret_and_version(req, options).await
+    }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn enable_secret_version(
+        &self,
+        req: crate::model::secret_manager_service::EnableSecretVersionRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::SecretVersion>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "SecretManagerService",
+            "::enable_secret_version"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "enable_secret_version",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
+
+        let result = self.inner.enable_secret_version(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
     }
 
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn enable_secret_version(
         &self,
@@ -263,18 +836,68 @@ where
     ) -> Result<gax::response::Response<crate::model::SecretVersion>> {
         self.inner.enable_secret_version(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn enable_secret_version_by_project_and_location_and_secret_and_version(
+        &self,
+        req: crate::model::secret_manager_service::EnableSecretVersionByProjectAndLocationAndSecretAndVersionRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::SecretVersion>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "SecretManagerService",
+            "::enable_secret_version_by_project_and_location_and_secret_and_version"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "enable_secret_version_by_project_and_location_and_secret_and_version",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.enable_secret_version_by_project_and_location_and_secret_and_version(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn enable_secret_version_by_project_and_location_and_secret_and_version(
         &self,
         req: crate::model::secret_manager_service::EnableSecretVersionByProjectAndLocationAndSecretAndVersionRequest,
         options: gax::options::RequestOptions,
     ) -> Result<gax::response::Response<crate::model::SecretVersion>> {
-        self.inner
-            .enable_secret_version_by_project_and_location_and_secret_and_version(req, options)
-            .await
+        self.inner.enable_secret_version_by_project_and_location_and_secret_and_version(req, options).await
+    }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn destroy_secret_version(
+        &self,
+        req: crate::model::secret_manager_service::DestroySecretVersionRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::SecretVersion>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "SecretManagerService",
+            "::destroy_secret_version"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "destroy_secret_version",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
+
+        let result = self.inner.destroy_secret_version(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
     }
 
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn destroy_secret_version(
         &self,
@@ -283,18 +906,68 @@ where
     ) -> Result<gax::response::Response<crate::model::SecretVersion>> {
         self.inner.destroy_secret_version(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn destroy_secret_version_by_project_and_location_and_secret_and_version(
+        &self,
+        req: crate::model::secret_manager_service::DestroySecretVersionByProjectAndLocationAndSecretAndVersionRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::SecretVersion>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "SecretManagerService",
+            "::destroy_secret_version_by_project_and_location_and_secret_and_version"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "destroy_secret_version_by_project_and_location_and_secret_and_version",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.destroy_secret_version_by_project_and_location_and_secret_and_version(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn destroy_secret_version_by_project_and_location_and_secret_and_version(
         &self,
         req: crate::model::secret_manager_service::DestroySecretVersionByProjectAndLocationAndSecretAndVersionRequest,
         options: gax::options::RequestOptions,
     ) -> Result<gax::response::Response<crate::model::SecretVersion>> {
-        self.inner
-            .destroy_secret_version_by_project_and_location_and_secret_and_version(req, options)
-            .await
+        self.inner.destroy_secret_version_by_project_and_location_and_secret_and_version(req, options).await
+    }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn set_iam_policy(
+        &self,
+        req: crate::model::secret_manager_service::SetIamPolicyRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::Policy>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "SecretManagerService",
+            "::set_iam_policy"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "set_iam_policy",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
+
+        let result = self.inner.set_iam_policy(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
     }
 
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn set_iam_policy(
         &self,
@@ -303,18 +976,68 @@ where
     ) -> Result<gax::response::Response<crate::model::Policy>> {
         self.inner.set_iam_policy(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn set_iam_policy_by_project_and_location_and_secret(
+        &self,
+        req: crate::model::secret_manager_service::SetIamPolicyByProjectAndLocationAndSecretRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::Policy>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "SecretManagerService",
+            "::set_iam_policy_by_project_and_location_and_secret"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "set_iam_policy_by_project_and_location_and_secret",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.set_iam_policy_by_project_and_location_and_secret(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn set_iam_policy_by_project_and_location_and_secret(
         &self,
         req: crate::model::secret_manager_service::SetIamPolicyByProjectAndLocationAndSecretRequest,
         options: gax::options::RequestOptions,
     ) -> Result<gax::response::Response<crate::model::Policy>> {
-        self.inner
-            .set_iam_policy_by_project_and_location_and_secret(req, options)
-            .await
+        self.inner.set_iam_policy_by_project_and_location_and_secret(req, options).await
+    }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn get_iam_policy(
+        &self,
+        req: crate::model::secret_manager_service::GetIamPolicyRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::Policy>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "SecretManagerService",
+            "::get_iam_policy"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "get_iam_policy",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
+
+        let result = self.inner.get_iam_policy(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
     }
 
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn get_iam_policy(
         &self,
@@ -323,18 +1046,68 @@ where
     ) -> Result<gax::response::Response<crate::model::Policy>> {
         self.inner.get_iam_policy(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn get_iam_policy_by_project_and_location_and_secret(
+        &self,
+        req: crate::model::secret_manager_service::GetIamPolicyByProjectAndLocationAndSecretRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::Policy>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "SecretManagerService",
+            "::get_iam_policy_by_project_and_location_and_secret"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "get_iam_policy_by_project_and_location_and_secret",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.get_iam_policy_by_project_and_location_and_secret(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn get_iam_policy_by_project_and_location_and_secret(
         &self,
         req: crate::model::secret_manager_service::GetIamPolicyByProjectAndLocationAndSecretRequest,
         options: gax::options::RequestOptions,
     ) -> Result<gax::response::Response<crate::model::Policy>> {
-        self.inner
-            .get_iam_policy_by_project_and_location_and_secret(req, options)
-            .await
+        self.inner.get_iam_policy_by_project_and_location_and_secret(req, options).await
+    }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn test_iam_permissions(
+        &self,
+        req: crate::model::secret_manager_service::TestIamPermissionsRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::TestIamPermissionsResponse>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "SecretManagerService",
+            "::test_iam_permissions"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "test_iam_permissions",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
+
+        let result = self.inner.test_iam_permissions(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
     }
 
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn test_iam_permissions(
         &self,
@@ -343,15 +1116,40 @@ where
     ) -> Result<gax::response::Response<crate::model::TestIamPermissionsResponse>> {
         self.inner.test_iam_permissions(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn test_iam_permissions_by_project_and_location_and_secret(
+        &self,
+        req: crate::model::secret_manager_service::TestIamPermissionsByProjectAndLocationAndSecretRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::TestIamPermissionsResponse>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "SecretManagerService",
+            "::test_iam_permissions_by_project_and_location_and_secret"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "test_iam_permissions_by_project_and_location_and_secret",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.test_iam_permissions_by_project_and_location_and_secret(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn test_iam_permissions_by_project_and_location_and_secret(
         &self,
         req: crate::model::secret_manager_service::TestIamPermissionsByProjectAndLocationAndSecretRequest,
         options: gax::options::RequestOptions,
     ) -> Result<gax::response::Response<crate::model::TestIamPermissionsResponse>> {
-        self.inner
-            .test_iam_permissions_by_project_and_location_and_secret(req, options)
-            .await
+        self.inner.test_iam_permissions_by_project_and_location_and_secret(req, options).await
     }
 }
+

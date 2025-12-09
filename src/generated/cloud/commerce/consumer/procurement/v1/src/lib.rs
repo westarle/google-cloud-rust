@@ -16,11 +16,8 @@
 
 //! Google Cloud Client Libraries for Rust - Cloud Commerce Consumer Procurement API
 //!
-//!
-//!
 //! This crate contains traits, types, and functions to interact with Cloud Commerce Consumer Procurement API
 //! Most applications will use the structs defined in the [client] module.
-//!
 //!
 //! The client library types and functions are stable and not expected to change.
 //! Please note that Google Cloud services do change from time to time. The client
@@ -28,11 +25,11 @@
 //! changes in compatible ways. For example, adding RPCs, or fields to messages
 //! should not introduce breaking changes to the client libraries.
 //!
-//!
 //! # Available Clients
 //!
 //! * [LicenseManagementService](client/struct.LicenseManagementService.html)
 //! * [ConsumerProcurementService](client/struct.ConsumerProcurementService.html)
+
 
 /// The messages and enums that are part of this client library.
 #[allow(clippy::module_inception)]
@@ -60,17 +57,5 @@ pub(crate) mod transport;
 /// The default host used by the service.
 const DEFAULT_HOST: &str = "https://cloudcommerceconsumerprocurement.googleapis.com/";
 
-pub(crate) mod info {
-    const NAME: &str = env!("CARGO_PKG_NAME");
-    const VERSION: &str = env!("CARGO_PKG_VERSION");
-    lazy_static::lazy_static! {
-        pub(crate) static ref X_GOOG_API_CLIENT_HEADER: String = {
-            let ac = gaxi::api_header::XGoogApiClient{
-                name:          NAME,
-                version:       VERSION,
-                library_type:  gaxi::api_header::GAPIC,
-            };
-            ac.rest_header_value()
-        };
-    }
-}
+
+

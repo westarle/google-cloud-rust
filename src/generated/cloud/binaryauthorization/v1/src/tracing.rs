@@ -18,25 +18,46 @@ use crate::Result;
 /// Implements a [BinauthzManagementServiceV1](super::stub::BinauthzManagementServiceV1) decorator for logging and tracing.
 #[derive(Clone, Debug)]
 pub struct BinauthzManagementServiceV1<T>
-where
-    T: super::stub::BinauthzManagementServiceV1 + std::fmt::Debug + Send + Sync,
-{
+where T: super::stub::BinauthzManagementServiceV1 + std::fmt::Debug + Send + Sync {
     inner: T,
 }
 
 impl<T> BinauthzManagementServiceV1<T>
-where
-    T: super::stub::BinauthzManagementServiceV1 + std::fmt::Debug + Send + Sync,
-{
+where T: super::stub::BinauthzManagementServiceV1 + std::fmt::Debug + Send + Sync {
     pub fn new(inner: T) -> Self {
         Self { inner }
     }
 }
 
 impl<T> super::stub::BinauthzManagementServiceV1 for BinauthzManagementServiceV1<T>
-where
-    T: super::stub::BinauthzManagementServiceV1 + std::fmt::Debug + Send + Sync,
-{
+where T: super::stub::BinauthzManagementServiceV1 + std::fmt::Debug + Send + Sync {
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn get_policy(
+        &self,
+        req: crate::model::GetPolicyRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::Policy>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "BinauthzManagementServiceV1",
+            "::get_policy"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "get_policy",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
+
+        let result = self.inner.get_policy(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn get_policy(
         &self,
@@ -45,7 +66,33 @@ where
     ) -> Result<gax::response::Response<crate::model::Policy>> {
         self.inner.get_policy(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn update_policy(
+        &self,
+        req: crate::model::UpdatePolicyRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::Policy>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "BinauthzManagementServiceV1",
+            "::update_policy"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "update_policy",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.update_policy(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn update_policy(
         &self,
@@ -54,7 +101,33 @@ where
     ) -> Result<gax::response::Response<crate::model::Policy>> {
         self.inner.update_policy(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn create_attestor(
+        &self,
+        req: crate::model::CreateAttestorRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::Attestor>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "BinauthzManagementServiceV1",
+            "::create_attestor"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "create_attestor",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.create_attestor(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn create_attestor(
         &self,
@@ -63,7 +136,33 @@ where
     ) -> Result<gax::response::Response<crate::model::Attestor>> {
         self.inner.create_attestor(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn get_attestor(
+        &self,
+        req: crate::model::GetAttestorRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::Attestor>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "BinauthzManagementServiceV1",
+            "::get_attestor"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "get_attestor",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.get_attestor(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn get_attestor(
         &self,
@@ -72,7 +171,33 @@ where
     ) -> Result<gax::response::Response<crate::model::Attestor>> {
         self.inner.get_attestor(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn update_attestor(
+        &self,
+        req: crate::model::UpdateAttestorRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::Attestor>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "BinauthzManagementServiceV1",
+            "::update_attestor"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "update_attestor",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.update_attestor(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn update_attestor(
         &self,
@@ -81,7 +206,33 @@ where
     ) -> Result<gax::response::Response<crate::model::Attestor>> {
         self.inner.update_attestor(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn list_attestors(
+        &self,
+        req: crate::model::ListAttestorsRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::ListAttestorsResponse>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "BinauthzManagementServiceV1",
+            "::list_attestors"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "list_attestors",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.list_attestors(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn list_attestors(
         &self,
@@ -90,7 +241,33 @@ where
     ) -> Result<gax::response::Response<crate::model::ListAttestorsResponse>> {
         self.inner.list_attestors(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn delete_attestor(
+        &self,
+        req: crate::model::DeleteAttestorRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<()>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "BinauthzManagementServiceV1",
+            "::delete_attestor"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "delete_attestor",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.delete_attestor(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn delete_attestor(
         &self,
@@ -104,25 +281,46 @@ where
 /// Implements a [SystemPolicyV1](super::stub::SystemPolicyV1) decorator for logging and tracing.
 #[derive(Clone, Debug)]
 pub struct SystemPolicyV1<T>
-where
-    T: super::stub::SystemPolicyV1 + std::fmt::Debug + Send + Sync,
-{
+where T: super::stub::SystemPolicyV1 + std::fmt::Debug + Send + Sync {
     inner: T,
 }
 
 impl<T> SystemPolicyV1<T>
-where
-    T: super::stub::SystemPolicyV1 + std::fmt::Debug + Send + Sync,
-{
+where T: super::stub::SystemPolicyV1 + std::fmt::Debug + Send + Sync {
     pub fn new(inner: T) -> Self {
         Self { inner }
     }
 }
 
 impl<T> super::stub::SystemPolicyV1 for SystemPolicyV1<T>
-where
-    T: super::stub::SystemPolicyV1 + std::fmt::Debug + Send + Sync,
-{
+where T: super::stub::SystemPolicyV1 + std::fmt::Debug + Send + Sync {
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn get_system_policy(
+        &self,
+        req: crate::model::GetSystemPolicyRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::Policy>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "SystemPolicyV1",
+            "::get_system_policy"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "get_system_policy",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
+
+        let result = self.inner.get_system_policy(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn get_system_policy(
         &self,
@@ -136,33 +334,53 @@ where
 /// Implements a [ValidationHelperV1](super::stub::ValidationHelperV1) decorator for logging and tracing.
 #[derive(Clone, Debug)]
 pub struct ValidationHelperV1<T>
-where
-    T: super::stub::ValidationHelperV1 + std::fmt::Debug + Send + Sync,
-{
+where T: super::stub::ValidationHelperV1 + std::fmt::Debug + Send + Sync {
     inner: T,
 }
 
 impl<T> ValidationHelperV1<T>
-where
-    T: super::stub::ValidationHelperV1 + std::fmt::Debug + Send + Sync,
-{
+where T: super::stub::ValidationHelperV1 + std::fmt::Debug + Send + Sync {
     pub fn new(inner: T) -> Self {
         Self { inner }
     }
 }
 
 impl<T> super::stub::ValidationHelperV1 for ValidationHelperV1<T>
-where
-    T: super::stub::ValidationHelperV1 + std::fmt::Debug + Send + Sync,
-{
+where T: super::stub::ValidationHelperV1 + std::fmt::Debug + Send + Sync {
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn validate_attestation_occurrence(
+        &self,
+        req: crate::model::ValidateAttestationOccurrenceRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::ValidateAttestationOccurrenceResponse>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "ValidationHelperV1",
+            "::validate_attestation_occurrence"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "validate_attestation_occurrence",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
+
+        let result = self.inner.validate_attestation_occurrence(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn validate_attestation_occurrence(
         &self,
         req: crate::model::ValidateAttestationOccurrenceRequest,
         options: gax::options::RequestOptions,
     ) -> Result<gax::response::Response<crate::model::ValidateAttestationOccurrenceResponse>> {
-        self.inner
-            .validate_attestation_occurrence(req, options)
-            .await
+        self.inner.validate_attestation_occurrence(req, options).await
     }
 }
+

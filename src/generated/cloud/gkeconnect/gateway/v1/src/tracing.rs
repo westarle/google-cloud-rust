@@ -18,25 +18,46 @@ use crate::Result;
 /// Implements a [GatewayControl](super::stub::GatewayControl) decorator for logging and tracing.
 #[derive(Clone, Debug)]
 pub struct GatewayControl<T>
-where
-    T: super::stub::GatewayControl + std::fmt::Debug + Send + Sync,
-{
+where T: super::stub::GatewayControl + std::fmt::Debug + Send + Sync {
     inner: T,
 }
 
 impl<T> GatewayControl<T>
-where
-    T: super::stub::GatewayControl + std::fmt::Debug + Send + Sync,
-{
+where T: super::stub::GatewayControl + std::fmt::Debug + Send + Sync {
     pub fn new(inner: T) -> Self {
         Self { inner }
     }
 }
 
 impl<T> super::stub::GatewayControl for GatewayControl<T>
-where
-    T: super::stub::GatewayControl + std::fmt::Debug + Send + Sync,
-{
+where T: super::stub::GatewayControl + std::fmt::Debug + Send + Sync {
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn generate_credentials(
+        &self,
+        req: crate::model::GenerateCredentialsRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::GenerateCredentialsResponse>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "GatewayControl",
+            "::generate_credentials"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "generate_credentials",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
+
+        let result = self.inner.generate_credentials(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn generate_credentials(
         &self,
@@ -46,3 +67,4 @@ where
         self.inner.generate_credentials(req, options).await
     }
 }
+

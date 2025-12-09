@@ -18,25 +18,46 @@ use crate::Result;
 /// Implements a [Publisher](super::stub::Publisher) decorator for logging and tracing.
 #[derive(Clone, Debug)]
 pub struct Publisher<T>
-where
-    T: super::stub::Publisher + std::fmt::Debug + Send + Sync,
-{
+where T: super::stub::Publisher + std::fmt::Debug + Send + Sync {
     inner: T,
 }
 
 impl<T> Publisher<T>
-where
-    T: super::stub::Publisher + std::fmt::Debug + Send + Sync,
-{
+where T: super::stub::Publisher + std::fmt::Debug + Send + Sync {
     pub fn new(inner: T) -> Self {
         Self { inner }
     }
 }
 
 impl<T> super::stub::Publisher for Publisher<T>
-where
-    T: super::stub::Publisher + std::fmt::Debug + Send + Sync,
-{
+where T: super::stub::Publisher + std::fmt::Debug + Send + Sync {
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn publish(
+        &self,
+        req: crate::model::PublishRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::PublishResponse>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "Publisher",
+            "::publish"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "publish",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
+
+        let result = self.inner.publish(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn publish(
         &self,
@@ -46,3 +67,4 @@ where
         self.inner.publish(req, options).await
     }
 }
+

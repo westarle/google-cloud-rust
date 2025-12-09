@@ -18,25 +18,46 @@ use crate::Result;
 /// Implements a [CaseAttachmentService](super::stub::CaseAttachmentService) decorator for logging and tracing.
 #[derive(Clone, Debug)]
 pub struct CaseAttachmentService<T>
-where
-    T: super::stub::CaseAttachmentService + std::fmt::Debug + Send + Sync,
-{
+where T: super::stub::CaseAttachmentService + std::fmt::Debug + Send + Sync {
     inner: T,
 }
 
 impl<T> CaseAttachmentService<T>
-where
-    T: super::stub::CaseAttachmentService + std::fmt::Debug + Send + Sync,
-{
+where T: super::stub::CaseAttachmentService + std::fmt::Debug + Send + Sync {
     pub fn new(inner: T) -> Self {
         Self { inner }
     }
 }
 
 impl<T> super::stub::CaseAttachmentService for CaseAttachmentService<T>
-where
-    T: super::stub::CaseAttachmentService + std::fmt::Debug + Send + Sync,
-{
+where T: super::stub::CaseAttachmentService + std::fmt::Debug + Send + Sync {
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn list_attachments(
+        &self,
+        req: crate::model::ListAttachmentsRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::ListAttachmentsResponse>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "CaseAttachmentService",
+            "::list_attachments"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "list_attachments",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
+
+        let result = self.inner.list_attachments(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn list_attachments(
         &self,
@@ -50,25 +71,46 @@ where
 /// Implements a [CaseService](super::stub::CaseService) decorator for logging and tracing.
 #[derive(Clone, Debug)]
 pub struct CaseService<T>
-where
-    T: super::stub::CaseService + std::fmt::Debug + Send + Sync,
-{
+where T: super::stub::CaseService + std::fmt::Debug + Send + Sync {
     inner: T,
 }
 
 impl<T> CaseService<T>
-where
-    T: super::stub::CaseService + std::fmt::Debug + Send + Sync,
-{
+where T: super::stub::CaseService + std::fmt::Debug + Send + Sync {
     pub fn new(inner: T) -> Self {
         Self { inner }
     }
 }
 
 impl<T> super::stub::CaseService for CaseService<T>
-where
-    T: super::stub::CaseService + std::fmt::Debug + Send + Sync,
-{
+where T: super::stub::CaseService + std::fmt::Debug + Send + Sync {
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn get_case(
+        &self,
+        req: crate::model::GetCaseRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::Case>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "CaseService",
+            "::get_case"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "get_case",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
+
+        let result = self.inner.get_case(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn get_case(
         &self,
@@ -77,7 +119,33 @@ where
     ) -> Result<gax::response::Response<crate::model::Case>> {
         self.inner.get_case(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn list_cases(
+        &self,
+        req: crate::model::ListCasesRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::ListCasesResponse>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "CaseService",
+            "::list_cases"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "list_cases",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.list_cases(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn list_cases(
         &self,
@@ -86,7 +154,33 @@ where
     ) -> Result<gax::response::Response<crate::model::ListCasesResponse>> {
         self.inner.list_cases(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn search_cases(
+        &self,
+        req: crate::model::SearchCasesRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::SearchCasesResponse>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "CaseService",
+            "::search_cases"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "search_cases",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.search_cases(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn search_cases(
         &self,
@@ -95,7 +189,33 @@ where
     ) -> Result<gax::response::Response<crate::model::SearchCasesResponse>> {
         self.inner.search_cases(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn create_case(
+        &self,
+        req: crate::model::CreateCaseRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::Case>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "CaseService",
+            "::create_case"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "create_case",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.create_case(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn create_case(
         &self,
@@ -104,7 +224,33 @@ where
     ) -> Result<gax::response::Response<crate::model::Case>> {
         self.inner.create_case(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn update_case(
+        &self,
+        req: crate::model::UpdateCaseRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::Case>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "CaseService",
+            "::update_case"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "update_case",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.update_case(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn update_case(
         &self,
@@ -113,7 +259,33 @@ where
     ) -> Result<gax::response::Response<crate::model::Case>> {
         self.inner.update_case(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn escalate_case(
+        &self,
+        req: crate::model::EscalateCaseRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::Case>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "CaseService",
+            "::escalate_case"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "escalate_case",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.escalate_case(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn escalate_case(
         &self,
@@ -122,7 +294,33 @@ where
     ) -> Result<gax::response::Response<crate::model::Case>> {
         self.inner.escalate_case(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn close_case(
+        &self,
+        req: crate::model::CloseCaseRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::Case>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "CaseService",
+            "::close_case"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "close_case",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.close_case(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn close_case(
         &self,
@@ -131,7 +329,33 @@ where
     ) -> Result<gax::response::Response<crate::model::Case>> {
         self.inner.close_case(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn search_case_classifications(
+        &self,
+        req: crate::model::SearchCaseClassificationsRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::SearchCaseClassificationsResponse>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "CaseService",
+            "::search_case_classifications"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "search_case_classifications",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.search_case_classifications(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn search_case_classifications(
         &self,
@@ -145,25 +369,46 @@ where
 /// Implements a [CommentService](super::stub::CommentService) decorator for logging and tracing.
 #[derive(Clone, Debug)]
 pub struct CommentService<T>
-where
-    T: super::stub::CommentService + std::fmt::Debug + Send + Sync,
-{
+where T: super::stub::CommentService + std::fmt::Debug + Send + Sync {
     inner: T,
 }
 
 impl<T> CommentService<T>
-where
-    T: super::stub::CommentService + std::fmt::Debug + Send + Sync,
-{
+where T: super::stub::CommentService + std::fmt::Debug + Send + Sync {
     pub fn new(inner: T) -> Self {
         Self { inner }
     }
 }
 
 impl<T> super::stub::CommentService for CommentService<T>
-where
-    T: super::stub::CommentService + std::fmt::Debug + Send + Sync,
-{
+where T: super::stub::CommentService + std::fmt::Debug + Send + Sync {
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn list_comments(
+        &self,
+        req: crate::model::ListCommentsRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::ListCommentsResponse>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "CommentService",
+            "::list_comments"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "list_comments",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
+
+        let result = self.inner.list_comments(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn list_comments(
         &self,
@@ -172,7 +417,33 @@ where
     ) -> Result<gax::response::Response<crate::model::ListCommentsResponse>> {
         self.inner.list_comments(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn create_comment(
+        &self,
+        req: crate::model::CreateCommentRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::Comment>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "CommentService",
+            "::create_comment"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "create_comment",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.create_comment(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn create_comment(
         &self,
@@ -182,3 +453,4 @@ where
         self.inner.create_comment(req, options).await
     }
 }
+

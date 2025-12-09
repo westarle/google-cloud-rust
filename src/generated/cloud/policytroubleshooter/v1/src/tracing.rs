@@ -18,25 +18,46 @@ use crate::Result;
 /// Implements a [IamChecker](super::stub::IamChecker) decorator for logging and tracing.
 #[derive(Clone, Debug)]
 pub struct IamChecker<T>
-where
-    T: super::stub::IamChecker + std::fmt::Debug + Send + Sync,
-{
+where T: super::stub::IamChecker + std::fmt::Debug + Send + Sync {
     inner: T,
 }
 
 impl<T> IamChecker<T>
-where
-    T: super::stub::IamChecker + std::fmt::Debug + Send + Sync,
-{
+where T: super::stub::IamChecker + std::fmt::Debug + Send + Sync {
     pub fn new(inner: T) -> Self {
         Self { inner }
     }
 }
 
 impl<T> super::stub::IamChecker for IamChecker<T>
-where
-    T: super::stub::IamChecker + std::fmt::Debug + Send + Sync,
-{
+where T: super::stub::IamChecker + std::fmt::Debug + Send + Sync {
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn troubleshoot_iam_policy(
+        &self,
+        req: crate::model::TroubleshootIamPolicyRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::TroubleshootIamPolicyResponse>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "IamChecker",
+            "::troubleshoot_iam_policy"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "troubleshoot_iam_policy",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
+
+        let result = self.inner.troubleshoot_iam_policy(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn troubleshoot_iam_policy(
         &self,
@@ -46,3 +67,4 @@ where
         self.inner.troubleshoot_iam_policy(req, options).await
     }
 }
+

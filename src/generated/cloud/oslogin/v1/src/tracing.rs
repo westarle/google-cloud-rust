@@ -18,25 +18,46 @@ use crate::Result;
 /// Implements a [OsLoginService](super::stub::OsLoginService) decorator for logging and tracing.
 #[derive(Clone, Debug)]
 pub struct OsLoginService<T>
-where
-    T: super::stub::OsLoginService + std::fmt::Debug + Send + Sync,
-{
+where T: super::stub::OsLoginService + std::fmt::Debug + Send + Sync {
     inner: T,
 }
 
 impl<T> OsLoginService<T>
-where
-    T: super::stub::OsLoginService + std::fmt::Debug + Send + Sync,
-{
+where T: super::stub::OsLoginService + std::fmt::Debug + Send + Sync {
     pub fn new(inner: T) -> Self {
         Self { inner }
     }
 }
 
 impl<T> super::stub::OsLoginService for OsLoginService<T>
-where
-    T: super::stub::OsLoginService + std::fmt::Debug + Send + Sync,
-{
+where T: super::stub::OsLoginService + std::fmt::Debug + Send + Sync {
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn create_ssh_public_key(
+        &self,
+        req: crate::model::CreateSshPublicKeyRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<oslogin_common::model::SshPublicKey>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "OsLoginService",
+            "::create_ssh_public_key"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "create_ssh_public_key",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
+
+        let result = self.inner.create_ssh_public_key(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn create_ssh_public_key(
         &self,
@@ -45,7 +66,33 @@ where
     ) -> Result<gax::response::Response<oslogin_common::model::SshPublicKey>> {
         self.inner.create_ssh_public_key(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn delete_posix_account(
+        &self,
+        req: crate::model::DeletePosixAccountRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<()>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "OsLoginService",
+            "::delete_posix_account"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "delete_posix_account",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.delete_posix_account(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn delete_posix_account(
         &self,
@@ -54,7 +101,33 @@ where
     ) -> Result<gax::response::Response<()>> {
         self.inner.delete_posix_account(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn delete_ssh_public_key(
+        &self,
+        req: crate::model::DeleteSshPublicKeyRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<()>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "OsLoginService",
+            "::delete_ssh_public_key"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "delete_ssh_public_key",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.delete_ssh_public_key(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn delete_ssh_public_key(
         &self,
@@ -63,7 +136,33 @@ where
     ) -> Result<gax::response::Response<()>> {
         self.inner.delete_ssh_public_key(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn get_login_profile(
+        &self,
+        req: crate::model::GetLoginProfileRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::LoginProfile>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "OsLoginService",
+            "::get_login_profile"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "get_login_profile",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.get_login_profile(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn get_login_profile(
         &self,
@@ -72,7 +171,33 @@ where
     ) -> Result<gax::response::Response<crate::model::LoginProfile>> {
         self.inner.get_login_profile(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn get_ssh_public_key(
+        &self,
+        req: crate::model::GetSshPublicKeyRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<oslogin_common::model::SshPublicKey>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "OsLoginService",
+            "::get_ssh_public_key"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "get_ssh_public_key",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.get_ssh_public_key(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn get_ssh_public_key(
         &self,
@@ -81,7 +206,33 @@ where
     ) -> Result<gax::response::Response<oslogin_common::model::SshPublicKey>> {
         self.inner.get_ssh_public_key(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn import_ssh_public_key(
+        &self,
+        req: crate::model::ImportSshPublicKeyRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::ImportSshPublicKeyResponse>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "OsLoginService",
+            "::import_ssh_public_key"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "import_ssh_public_key",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.import_ssh_public_key(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn import_ssh_public_key(
         &self,
@@ -90,7 +241,33 @@ where
     ) -> Result<gax::response::Response<crate::model::ImportSshPublicKeyResponse>> {
         self.inner.import_ssh_public_key(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn update_ssh_public_key(
+        &self,
+        req: crate::model::UpdateSshPublicKeyRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<oslogin_common::model::SshPublicKey>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "OsLoginService",
+            "::update_ssh_public_key"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "update_ssh_public_key",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.update_ssh_public_key(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn update_ssh_public_key(
         &self,
@@ -100,3 +277,4 @@ where
         self.inner.update_ssh_public_key(req, options).await
     }
 }
+

@@ -18,59 +18,151 @@ use crate::Result;
 /// Implements a [OrgPolicyViolationsPreviewService](super::stub::OrgPolicyViolationsPreviewService) decorator for logging and tracing.
 #[derive(Clone, Debug)]
 pub struct OrgPolicyViolationsPreviewService<T>
-where
-    T: super::stub::OrgPolicyViolationsPreviewService + std::fmt::Debug + Send + Sync,
-{
+where T: super::stub::OrgPolicyViolationsPreviewService + std::fmt::Debug + Send + Sync {
     inner: T,
 }
 
 impl<T> OrgPolicyViolationsPreviewService<T>
-where
-    T: super::stub::OrgPolicyViolationsPreviewService + std::fmt::Debug + Send + Sync,
-{
+where T: super::stub::OrgPolicyViolationsPreviewService + std::fmt::Debug + Send + Sync {
     pub fn new(inner: T) -> Self {
         Self { inner }
     }
 }
 
 impl<T> super::stub::OrgPolicyViolationsPreviewService for OrgPolicyViolationsPreviewService<T>
-where
-    T: super::stub::OrgPolicyViolationsPreviewService + std::fmt::Debug + Send + Sync,
-{
+where T: super::stub::OrgPolicyViolationsPreviewService + std::fmt::Debug + Send + Sync {
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn list_org_policy_violations_previews(
+        &self,
+        req: crate::model::ListOrgPolicyViolationsPreviewsRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::ListOrgPolicyViolationsPreviewsResponse>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "OrgPolicyViolationsPreviewService",
+            "::list_org_policy_violations_previews"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "list_org_policy_violations_previews",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
+
+        let result = self.inner.list_org_policy_violations_previews(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn list_org_policy_violations_previews(
         &self,
         req: crate::model::ListOrgPolicyViolationsPreviewsRequest,
         options: gax::options::RequestOptions,
-    ) -> Result<gax::response::Response<crate::model::ListOrgPolicyViolationsPreviewsResponse>>
-    {
-        self.inner
-            .list_org_policy_violations_previews(req, options)
-            .await
+    ) -> Result<gax::response::Response<crate::model::ListOrgPolicyViolationsPreviewsResponse>> {
+        self.inner.list_org_policy_violations_previews(req, options).await
+    }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn get_org_policy_violations_preview(
+        &self,
+        req: crate::model::GetOrgPolicyViolationsPreviewRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::OrgPolicyViolationsPreview>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "OrgPolicyViolationsPreviewService",
+            "::get_org_policy_violations_preview"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "get_org_policy_violations_preview",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
+
+        let result = self.inner.get_org_policy_violations_preview(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
     }
 
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn get_org_policy_violations_preview(
         &self,
         req: crate::model::GetOrgPolicyViolationsPreviewRequest,
         options: gax::options::RequestOptions,
     ) -> Result<gax::response::Response<crate::model::OrgPolicyViolationsPreview>> {
-        self.inner
-            .get_org_policy_violations_preview(req, options)
-            .await
+        self.inner.get_org_policy_violations_preview(req, options).await
+    }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn create_org_policy_violations_preview(
+        &self,
+        req: crate::model::CreateOrgPolicyViolationsPreviewRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<longrunning::model::Operation>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "OrgPolicyViolationsPreviewService",
+            "::create_org_policy_violations_preview"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "create_org_policy_violations_preview",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
+
+        let result = self.inner.create_org_policy_violations_preview(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
     }
 
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn create_org_policy_violations_preview(
         &self,
         req: crate::model::CreateOrgPolicyViolationsPreviewRequest,
         options: gax::options::RequestOptions,
     ) -> Result<gax::response::Response<longrunning::model::Operation>> {
-        self.inner
-            .create_org_policy_violations_preview(req, options)
-            .await
+        self.inner.create_org_policy_violations_preview(req, options).await
+    }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn list_org_policy_violations(
+        &self,
+        req: crate::model::ListOrgPolicyViolationsRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::ListOrgPolicyViolationsResponse>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "OrgPolicyViolationsPreviewService",
+            "::list_org_policy_violations"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "list_org_policy_violations",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
+
+        let result = self.inner.list_org_policy_violations(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
     }
 
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn list_org_policy_violations(
         &self,
@@ -79,7 +171,33 @@ where
     ) -> Result<gax::response::Response<crate::model::ListOrgPolicyViolationsResponse>> {
         self.inner.list_org_policy_violations(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn list_operations(
+        &self,
+        req: longrunning::model::ListOperationsRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<longrunning::model::ListOperationsResponse>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "OrgPolicyViolationsPreviewService",
+            "::list_operations"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "list_operations",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.list_operations(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn list_operations(
         &self,
@@ -88,7 +206,33 @@ where
     ) -> Result<gax::response::Response<longrunning::model::ListOperationsResponse>> {
         self.inner.list_operations(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn get_operation(
+        &self,
+        req: longrunning::model::GetOperationRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<longrunning::model::Operation>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "OrgPolicyViolationsPreviewService",
+            "::get_operation"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "get_operation",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.get_operation(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn get_operation(
         &self,
@@ -116,25 +260,46 @@ where
 /// Implements a [Simulator](super::stub::Simulator) decorator for logging and tracing.
 #[derive(Clone, Debug)]
 pub struct Simulator<T>
-where
-    T: super::stub::Simulator + std::fmt::Debug + Send + Sync,
-{
+where T: super::stub::Simulator + std::fmt::Debug + Send + Sync {
     inner: T,
 }
 
 impl<T> Simulator<T>
-where
-    T: super::stub::Simulator + std::fmt::Debug + Send + Sync,
-{
+where T: super::stub::Simulator + std::fmt::Debug + Send + Sync {
     pub fn new(inner: T) -> Self {
         Self { inner }
     }
 }
 
 impl<T> super::stub::Simulator for Simulator<T>
-where
-    T: super::stub::Simulator + std::fmt::Debug + Send + Sync,
-{
+where T: super::stub::Simulator + std::fmt::Debug + Send + Sync {
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn get_replay(
+        &self,
+        req: crate::model::GetReplayRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::Replay>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "Simulator",
+            "::get_replay"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "get_replay",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
+
+        let result = self.inner.get_replay(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn get_replay(
         &self,
@@ -143,7 +308,33 @@ where
     ) -> Result<gax::response::Response<crate::model::Replay>> {
         self.inner.get_replay(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn create_replay(
+        &self,
+        req: crate::model::CreateReplayRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<longrunning::model::Operation>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "Simulator",
+            "::create_replay"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "create_replay",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.create_replay(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn create_replay(
         &self,
@@ -152,7 +343,33 @@ where
     ) -> Result<gax::response::Response<longrunning::model::Operation>> {
         self.inner.create_replay(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn list_replay_results(
+        &self,
+        req: crate::model::ListReplayResultsRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::ListReplayResultsResponse>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "Simulator",
+            "::list_replay_results"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "list_replay_results",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.list_replay_results(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn list_replay_results(
         &self,
@@ -161,7 +378,33 @@ where
     ) -> Result<gax::response::Response<crate::model::ListReplayResultsResponse>> {
         self.inner.list_replay_results(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn list_operations(
+        &self,
+        req: longrunning::model::ListOperationsRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<longrunning::model::ListOperationsResponse>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "Simulator",
+            "::list_operations"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "list_operations",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.list_operations(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn list_operations(
         &self,
@@ -170,7 +413,33 @@ where
     ) -> Result<gax::response::Response<longrunning::model::ListOperationsResponse>> {
         self.inner.list_operations(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn get_operation(
+        &self,
+        req: longrunning::model::GetOperationRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<longrunning::model::Operation>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "Simulator",
+            "::get_operation"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "get_operation",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.get_operation(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn get_operation(
         &self,
@@ -194,3 +463,4 @@ where
         self.inner.get_polling_backoff_policy(options)
     }
 }
+

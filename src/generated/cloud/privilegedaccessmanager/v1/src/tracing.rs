@@ -18,25 +18,46 @@ use crate::Result;
 /// Implements a [PrivilegedAccessManager](super::stub::PrivilegedAccessManager) decorator for logging and tracing.
 #[derive(Clone, Debug)]
 pub struct PrivilegedAccessManager<T>
-where
-    T: super::stub::PrivilegedAccessManager + std::fmt::Debug + Send + Sync,
-{
+where T: super::stub::PrivilegedAccessManager + std::fmt::Debug + Send + Sync {
     inner: T,
 }
 
 impl<T> PrivilegedAccessManager<T>
-where
-    T: super::stub::PrivilegedAccessManager + std::fmt::Debug + Send + Sync,
-{
+where T: super::stub::PrivilegedAccessManager + std::fmt::Debug + Send + Sync {
     pub fn new(inner: T) -> Self {
         Self { inner }
     }
 }
 
 impl<T> super::stub::PrivilegedAccessManager for PrivilegedAccessManager<T>
-where
-    T: super::stub::PrivilegedAccessManager + std::fmt::Debug + Send + Sync,
-{
+where T: super::stub::PrivilegedAccessManager + std::fmt::Debug + Send + Sync {
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn check_onboarding_status(
+        &self,
+        req: crate::model::CheckOnboardingStatusRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::CheckOnboardingStatusResponse>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "PrivilegedAccessManager",
+            "::check_onboarding_status"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "check_onboarding_status",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
+
+        let result = self.inner.check_onboarding_status(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn check_onboarding_status(
         &self,
@@ -45,7 +66,33 @@ where
     ) -> Result<gax::response::Response<crate::model::CheckOnboardingStatusResponse>> {
         self.inner.check_onboarding_status(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn list_entitlements(
+        &self,
+        req: crate::model::ListEntitlementsRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::ListEntitlementsResponse>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "PrivilegedAccessManager",
+            "::list_entitlements"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "list_entitlements",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.list_entitlements(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn list_entitlements(
         &self,
@@ -54,7 +101,33 @@ where
     ) -> Result<gax::response::Response<crate::model::ListEntitlementsResponse>> {
         self.inner.list_entitlements(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn search_entitlements(
+        &self,
+        req: crate::model::SearchEntitlementsRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::SearchEntitlementsResponse>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "PrivilegedAccessManager",
+            "::search_entitlements"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "search_entitlements",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.search_entitlements(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn search_entitlements(
         &self,
@@ -63,7 +136,33 @@ where
     ) -> Result<gax::response::Response<crate::model::SearchEntitlementsResponse>> {
         self.inner.search_entitlements(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn get_entitlement(
+        &self,
+        req: crate::model::GetEntitlementRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::Entitlement>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "PrivilegedAccessManager",
+            "::get_entitlement"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "get_entitlement",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.get_entitlement(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn get_entitlement(
         &self,
@@ -72,7 +171,33 @@ where
     ) -> Result<gax::response::Response<crate::model::Entitlement>> {
         self.inner.get_entitlement(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn create_entitlement(
+        &self,
+        req: crate::model::CreateEntitlementRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<longrunning::model::Operation>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "PrivilegedAccessManager",
+            "::create_entitlement"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "create_entitlement",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.create_entitlement(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn create_entitlement(
         &self,
@@ -81,7 +206,33 @@ where
     ) -> Result<gax::response::Response<longrunning::model::Operation>> {
         self.inner.create_entitlement(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn delete_entitlement(
+        &self,
+        req: crate::model::DeleteEntitlementRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<longrunning::model::Operation>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "PrivilegedAccessManager",
+            "::delete_entitlement"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "delete_entitlement",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.delete_entitlement(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn delete_entitlement(
         &self,
@@ -90,7 +241,33 @@ where
     ) -> Result<gax::response::Response<longrunning::model::Operation>> {
         self.inner.delete_entitlement(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn update_entitlement(
+        &self,
+        req: crate::model::UpdateEntitlementRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<longrunning::model::Operation>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "PrivilegedAccessManager",
+            "::update_entitlement"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "update_entitlement",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.update_entitlement(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn update_entitlement(
         &self,
@@ -99,7 +276,33 @@ where
     ) -> Result<gax::response::Response<longrunning::model::Operation>> {
         self.inner.update_entitlement(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn list_grants(
+        &self,
+        req: crate::model::ListGrantsRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::ListGrantsResponse>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "PrivilegedAccessManager",
+            "::list_grants"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "list_grants",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.list_grants(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn list_grants(
         &self,
@@ -108,7 +311,33 @@ where
     ) -> Result<gax::response::Response<crate::model::ListGrantsResponse>> {
         self.inner.list_grants(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn search_grants(
+        &self,
+        req: crate::model::SearchGrantsRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::SearchGrantsResponse>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "PrivilegedAccessManager",
+            "::search_grants"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "search_grants",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.search_grants(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn search_grants(
         &self,
@@ -117,7 +346,33 @@ where
     ) -> Result<gax::response::Response<crate::model::SearchGrantsResponse>> {
         self.inner.search_grants(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn get_grant(
+        &self,
+        req: crate::model::GetGrantRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::Grant>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "PrivilegedAccessManager",
+            "::get_grant"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "get_grant",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.get_grant(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn get_grant(
         &self,
@@ -126,7 +381,33 @@ where
     ) -> Result<gax::response::Response<crate::model::Grant>> {
         self.inner.get_grant(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn create_grant(
+        &self,
+        req: crate::model::CreateGrantRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::Grant>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "PrivilegedAccessManager",
+            "::create_grant"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "create_grant",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.create_grant(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn create_grant(
         &self,
@@ -135,7 +416,33 @@ where
     ) -> Result<gax::response::Response<crate::model::Grant>> {
         self.inner.create_grant(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn approve_grant(
+        &self,
+        req: crate::model::ApproveGrantRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::Grant>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "PrivilegedAccessManager",
+            "::approve_grant"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "approve_grant",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.approve_grant(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn approve_grant(
         &self,
@@ -144,7 +451,33 @@ where
     ) -> Result<gax::response::Response<crate::model::Grant>> {
         self.inner.approve_grant(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn deny_grant(
+        &self,
+        req: crate::model::DenyGrantRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::Grant>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "PrivilegedAccessManager",
+            "::deny_grant"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "deny_grant",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.deny_grant(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn deny_grant(
         &self,
@@ -153,7 +486,33 @@ where
     ) -> Result<gax::response::Response<crate::model::Grant>> {
         self.inner.deny_grant(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn revoke_grant(
+        &self,
+        req: crate::model::RevokeGrantRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<longrunning::model::Operation>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "PrivilegedAccessManager",
+            "::revoke_grant"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "revoke_grant",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.revoke_grant(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn revoke_grant(
         &self,
@@ -162,7 +521,33 @@ where
     ) -> Result<gax::response::Response<longrunning::model::Operation>> {
         self.inner.revoke_grant(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn list_locations(
+        &self,
+        req: location::model::ListLocationsRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<location::model::ListLocationsResponse>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "PrivilegedAccessManager",
+            "::list_locations"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "list_locations",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.list_locations(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn list_locations(
         &self,
@@ -171,7 +556,33 @@ where
     ) -> Result<gax::response::Response<location::model::ListLocationsResponse>> {
         self.inner.list_locations(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn get_location(
+        &self,
+        req: location::model::GetLocationRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<location::model::Location>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "PrivilegedAccessManager",
+            "::get_location"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "get_location",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.get_location(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn get_location(
         &self,
@@ -180,7 +591,33 @@ where
     ) -> Result<gax::response::Response<location::model::Location>> {
         self.inner.get_location(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn list_operations(
+        &self,
+        req: longrunning::model::ListOperationsRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<longrunning::model::ListOperationsResponse>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "PrivilegedAccessManager",
+            "::list_operations"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "list_operations",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.list_operations(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn list_operations(
         &self,
@@ -189,7 +626,33 @@ where
     ) -> Result<gax::response::Response<longrunning::model::ListOperationsResponse>> {
         self.inner.list_operations(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn get_operation(
+        &self,
+        req: longrunning::model::GetOperationRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<longrunning::model::Operation>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "PrivilegedAccessManager",
+            "::get_operation"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "get_operation",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.get_operation(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn get_operation(
         &self,
@@ -198,7 +661,33 @@ where
     ) -> Result<gax::response::Response<longrunning::model::Operation>> {
         self.inner.get_operation(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn delete_operation(
+        &self,
+        req: longrunning::model::DeleteOperationRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<()>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "PrivilegedAccessManager",
+            "::delete_operation"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "delete_operation",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.delete_operation(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn delete_operation(
         &self,
@@ -222,3 +711,4 @@ where
         self.inner.get_polling_backoff_policy(options)
     }
 }
+

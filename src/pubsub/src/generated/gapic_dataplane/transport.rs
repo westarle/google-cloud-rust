@@ -20,7 +20,7 @@ use gax::error::Error;
 
 const DEFAULT_HOST: &str = "https://pubsub.googleapis.com";
 
-mod info {
+pub(crate) mod info {
     const NAME: &str = env!("CARGO_PKG_NAME");
     const VERSION: &str = env!("CARGO_PKG_VERSION");
     lazy_static::lazy_static! {
@@ -31,6 +31,17 @@ mod info {
                 library_type:  gaxi::api_header::GAPIC,
             };
             ac.grpc_header_value()
+        };
+    }
+    #[cfg(google_cloud_unstable_tracing)]
+    lazy_static::lazy_static! {
+        pub(crate) static ref INSTRUMENTATION_CLIENT_INFO: gaxi::options::InstrumentationClientInfo = {
+            let mut info = gaxi::options::InstrumentationClientInfo::default();
+            info.service_name = "pubsub";
+            info.client_version = VERSION;
+            info.client_artifact = NAME;
+            info.default_host = "pubsub";
+            info
         };
     }
 }
@@ -51,7 +62,14 @@ impl std::fmt::Debug for Publisher {
 
 impl Publisher {
     pub async fn new(config: gaxi::options::ClientConfig) -> gax::client_builder::Result<Self> {
-        let inner = gaxi::grpc::Client::new(config, DEFAULT_HOST).await?;
+        #[cfg(google_cloud_unstable_tracing)]
+        let tracing_enabled = gaxi::options::tracing_enabled(&config);
+        #[cfg(google_cloud_unstable_tracing)]
+        let inner = if tracing_enabled {
+            gaxi::grpc::Client::new_with_instrumentation(config, DEFAULT_HOST, &info::INSTRUMENTATION_CLIENT_INFO).await?
+        } else {
+            gaxi::grpc::Client::new(config, DEFAULT_HOST).await?
+        };
         Ok(Self { inner })
     }
 }
@@ -63,20 +81,21 @@ impl super::stub::Publisher for Publisher {
         options: gax::options::RequestOptions,
     ) -> Result<gax::response::Response<crate::model::PublishResponse>> {
         use gaxi::prost::ToProto;
-        let options = gax::options::internal::set_default_idempotency(options, false);
+        let options = gax::options::internal::set_default_idempotency(
+            options,
+            false,
+        );
         let extensions = {
             let mut e = tonic::Extensions::new();
-            e.insert(tonic::GrpcMethod::new(
-                "google.pubsub.v1.Publisher",
-                "Publish",
-            ));
+            e.insert(tonic::GrpcMethod::new("google.pubsub.v1.Publisher", "Publish"));
             e
         };
-        let path = http::uri::PathAndQuery::from_static("/google.pubsub.v1.Publisher/Publish");
-        let x_goog_request_params = [Some(&req)
-            .map(|m| &m.topic)
-            .map(|s| s.as_str())
-            .map(|v| format!("topic={v}"))]
+        let path = http::uri::PathAndQuery::from_static(
+            "/google.pubsub.v1.Publisher/Publish"
+        );
+        let x_goog_request_params = [
+                Some(&req).map(|m| &m.topic).map(|s| s.as_str()).map(|v| format!("topic={v}")),
+        ]
         .into_iter()
         .flatten()
         .fold(String::new(), |b, p| b + "&" + &p);
@@ -94,4 +113,6 @@ impl super::stub::Publisher for Publisher {
             .await
             .and_then(gaxi::grpc::to_gax_response::<TR, crate::model::PublishResponse>)
     }
+
 }
+

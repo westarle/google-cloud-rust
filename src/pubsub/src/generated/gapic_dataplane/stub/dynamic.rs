@@ -22,6 +22,7 @@ pub trait Publisher: std::fmt::Debug + Send + Sync {
         req: crate::model::PublishRequest,
         options: gax::options::RequestOptions,
     ) -> crate::Result<gax::response::Response<crate::model::PublishResponse>>;
+
 }
 
 /// All implementations of [super::Publisher] also implement [Publisher].
@@ -35,4 +36,5 @@ impl<T: super::Publisher> Publisher for T {
     ) -> crate::Result<gax::response::Response<crate::model::PublishResponse>> {
         T::publish(self, req, options).await
     }
+
 }

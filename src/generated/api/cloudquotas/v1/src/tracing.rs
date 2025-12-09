@@ -18,25 +18,46 @@ use crate::Result;
 /// Implements a [CloudQuotas](super::stub::CloudQuotas) decorator for logging and tracing.
 #[derive(Clone, Debug)]
 pub struct CloudQuotas<T>
-where
-    T: super::stub::CloudQuotas + std::fmt::Debug + Send + Sync,
-{
+where T: super::stub::CloudQuotas + std::fmt::Debug + Send + Sync {
     inner: T,
 }
 
 impl<T> CloudQuotas<T>
-where
-    T: super::stub::CloudQuotas + std::fmt::Debug + Send + Sync,
-{
+where T: super::stub::CloudQuotas + std::fmt::Debug + Send + Sync {
     pub fn new(inner: T) -> Self {
         Self { inner }
     }
 }
 
 impl<T> super::stub::CloudQuotas for CloudQuotas<T>
-where
-    T: super::stub::CloudQuotas + std::fmt::Debug + Send + Sync,
-{
+where T: super::stub::CloudQuotas + std::fmt::Debug + Send + Sync {
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn list_quota_infos(
+        &self,
+        req: crate::model::ListQuotaInfosRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::ListQuotaInfosResponse>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "CloudQuotas",
+            "::list_quota_infos"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "list_quota_infos",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
+
+        let result = self.inner.list_quota_infos(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn list_quota_infos(
         &self,
@@ -45,7 +66,33 @@ where
     ) -> Result<gax::response::Response<crate::model::ListQuotaInfosResponse>> {
         self.inner.list_quota_infos(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn get_quota_info(
+        &self,
+        req: crate::model::GetQuotaInfoRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::QuotaInfo>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "CloudQuotas",
+            "::get_quota_info"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "get_quota_info",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.get_quota_info(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn get_quota_info(
         &self,
@@ -54,7 +101,33 @@ where
     ) -> Result<gax::response::Response<crate::model::QuotaInfo>> {
         self.inner.get_quota_info(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn list_quota_preferences(
+        &self,
+        req: crate::model::ListQuotaPreferencesRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::ListQuotaPreferencesResponse>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "CloudQuotas",
+            "::list_quota_preferences"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "list_quota_preferences",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.list_quota_preferences(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn list_quota_preferences(
         &self,
@@ -63,7 +136,33 @@ where
     ) -> Result<gax::response::Response<crate::model::ListQuotaPreferencesResponse>> {
         self.inner.list_quota_preferences(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn get_quota_preference(
+        &self,
+        req: crate::model::GetQuotaPreferenceRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::QuotaPreference>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "CloudQuotas",
+            "::get_quota_preference"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "get_quota_preference",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.get_quota_preference(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn get_quota_preference(
         &self,
@@ -72,7 +171,33 @@ where
     ) -> Result<gax::response::Response<crate::model::QuotaPreference>> {
         self.inner.get_quota_preference(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn create_quota_preference(
+        &self,
+        req: crate::model::CreateQuotaPreferenceRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::QuotaPreference>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "CloudQuotas",
+            "::create_quota_preference"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "create_quota_preference",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.create_quota_preference(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn create_quota_preference(
         &self,
@@ -81,7 +206,33 @@ where
     ) -> Result<gax::response::Response<crate::model::QuotaPreference>> {
         self.inner.create_quota_preference(req, options).await
     }
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn update_quota_preference(
+        &self,
+        req: crate::model::UpdateQuotaPreferenceRequest,
+        options: gax::options::RequestOptions,
+    ) -> Result<gax::response::Response<crate::model::QuotaPreference>> {
+        use tracing::Instrument;
+        let span_name = concat!(
+            env!("CARGO_PKG_NAME"),
+            "::client::",
+            "CloudQuotas",
+            "::update_quota_preference"
+        );
+        let client_request_span = gaxi::observability::create_client_request_span(
+            span_name,
+            "update_quota_preference",
+            &super::transport::info::INSTRUMENTATION_CLIENT_INFO,
+        );
 
+        let result = self.inner.update_quota_preference(req, options)
+            .instrument(client_request_span.clone()).await;
+
+        gaxi::observability::record_client_request_span(&result, &client_request_span);
+        result
+    }
+
+    #[cfg(not(google_cloud_unstable_tracing))]
     #[tracing::instrument(ret)]
     async fn update_quota_preference(
         &self,
@@ -91,3 +242,4 @@ where
         self.inner.update_quota_preference(req, options).await
     }
 }
+

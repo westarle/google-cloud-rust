@@ -32,6 +32,7 @@ mod serialize;
 #[derive(Clone, Default, PartialEq)]
 #[non_exhaustive]
 pub struct PubsubMessage {
+
     /// Optional. The message data field. If this field is empty, the message must
     /// contain at least one attribute.
     pub data: ::bytes::Bytes,
@@ -39,7 +40,7 @@ pub struct PubsubMessage {
     /// Optional. Attributes for this message. If this field is empty, the message
     /// must contain non-empty data. This can be used to filter messages on the
     /// subscription.
-    pub attributes: std::collections::HashMap<std::string::String, std::string::String>,
+    pub attributes: std::collections::HashMap<std::string::String,std::string::String>,
 
     /// ID of this message, assigned by the server when the message is published.
     /// Guaranteed to be unique within the topic. This value may be read by a
@@ -96,8 +97,7 @@ impl PubsubMessage {
 
     /// Sets the value of [publish_time][crate::model::PubsubMessage::publish_time].
     pub fn set_publish_time<T>(mut self, v: T) -> Self
-    where
-        T: std::convert::Into<wkt::Timestamp>,
+    where T: std::convert::Into<wkt::Timestamp>
     {
         self.publish_time = std::option::Option::Some(v.into());
         self
@@ -105,8 +105,7 @@ impl PubsubMessage {
 
     /// Sets or clears the value of [publish_time][crate::model::PubsubMessage::publish_time].
     pub fn set_or_clear_publish_time<T>(mut self, v: std::option::Option<T>) -> Self
-    where
-        T: std::convert::Into<wkt::Timestamp>,
+    where T: std::convert::Into<wkt::Timestamp>
     {
         self.publish_time = v.map(|x| x.into());
         self
@@ -129,6 +128,7 @@ impl wkt::message::Message for PubsubMessage {
 #[derive(Clone, Default, PartialEq)]
 #[non_exhaustive]
 pub struct PublishRequest {
+
     /// Required. The messages in the request will be published on this topic.
     /// Format is `projects/{project}/topics/{topic}`.
     pub topic: std::string::String,
@@ -154,7 +154,7 @@ impl PublishRequest {
     pub fn set_messages<T, V>(mut self, v: T) -> Self
     where
         T: std::iter::IntoIterator<Item = V>,
-        V: std::convert::Into<crate::model::PubsubMessage>,
+        V: std::convert::Into<crate::model::PubsubMessage>
     {
         use std::iter::Iterator;
         self.messages = v.into_iter().map(|i| i.into()).collect();
@@ -172,6 +172,7 @@ impl wkt::message::Message for PublishRequest {
 #[derive(Clone, Default, PartialEq)]
 #[non_exhaustive]
 pub struct PublishResponse {
+
     /// Optional. The server-assigned ID of each published message, in the same
     /// order as the messages in the request. IDs are guaranteed to be unique
     /// within the topic.
@@ -189,7 +190,7 @@ impl PublishResponse {
     pub fn set_message_ids<T, V>(mut self, v: T) -> Self
     where
         T: std::iter::IntoIterator<Item = V>,
-        V: std::convert::Into<std::string::String>,
+        V: std::convert::Into<std::string::String>
     {
         use std::iter::Iterator;
         self.message_ids = v.into_iter().map(|i| i.into()).collect();

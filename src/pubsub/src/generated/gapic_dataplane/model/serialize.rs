@@ -23,9 +23,9 @@ impl serde::ser::Serialize for super::PubsubMessage {
     where
         S: serde::ser::Serializer,
     {
-        use serde::ser::SerializeMap;
         #[allow(unused_imports)]
         use std::option::Option::Some;
+        use serde::ser::SerializeMap;
         let mut state = serializer.serialize_map(std::option::Option::None)?;
         if !self.data.is_empty() {
             struct __With<'a>(&'a ::bytes::Bytes);
@@ -66,9 +66,9 @@ impl serde::ser::Serialize for super::PublishRequest {
     where
         S: serde::ser::Serializer,
     {
-        use serde::ser::SerializeMap;
         #[allow(unused_imports)]
         use std::option::Option::Some;
+        use serde::ser::SerializeMap;
         let mut state = serializer.serialize_map(std::option::Option::None)?;
         if !self.topic.is_empty() {
             state.serialize_entry("topic", &self.topic)?;
@@ -91,9 +91,9 @@ impl serde::ser::Serialize for super::PublishResponse {
     where
         S: serde::ser::Serializer,
     {
-        use serde::ser::SerializeMap;
         #[allow(unused_imports)]
         use std::option::Option::Some;
+        use serde::ser::SerializeMap;
         let mut state = serializer.serialize_map(std::option::Option::None)?;
         if !self.message_ids.is_empty() {
             state.serialize_entry("messageIds", &self.message_ids)?;
