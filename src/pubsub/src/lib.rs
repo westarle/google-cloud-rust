@@ -134,7 +134,9 @@ pub mod stub {
 const DEFAULT_HOST: &str = "https://pubsub.googleapis.com";
 
 mod info {
+    #[allow(dead_code)]
     const NAME: &str = env!("CARGO_PKG_NAME");
+    #[allow(dead_code)]
     const VERSION: &str = env!("CARGO_PKG_VERSION");
     lazy_static::lazy_static! {
         pub(crate) static ref X_GOOG_API_CLIENT_HEADER: String = {
