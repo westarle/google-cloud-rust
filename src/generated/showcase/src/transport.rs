@@ -18,6 +18,7 @@ use crate::Result;
 #[allow(unused_imports)]
 use gax::error::Error;
 
+pub(crate) use crate::info;
 /// Implements [Compliance](super::stub::Compliance) using a [gaxi::http::ReqwestClient].
 #[derive(Clone)]
 pub struct Compliance {
