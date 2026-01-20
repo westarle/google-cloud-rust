@@ -805,7 +805,7 @@ impl gaxi::prost::ToProto<bucket::lifecycle::rule::Condition> for crate::generat
     fn to_proto(self) -> std::result::Result<bucket::lifecycle::rule::Condition, gaxi::prost::ConvertError> {
         Ok(Self::Output {
             age_days: self.age_days.map(|v| v.to_proto()).transpose()?,
-            created_before: self.created_before.map(|v| v.to_proto()).transpose()?,
+            created_before: self.created_before.map(|v| <gtype::model::Date as gaxi::prost::ToProto<crate::google::r#type::Date>>::to_proto(v)).transpose()?,
             is_live: self.is_live.map(|v| v.to_proto()).transpose()?,
             num_newer_versions: self.num_newer_versions.map(|v| v.to_proto()).transpose()?,
             matches_storage_class: self.matches_storage_class
@@ -813,9 +813,9 @@ impl gaxi::prost::ToProto<bucket::lifecycle::rule::Condition> for crate::generat
                 .map(|v| v.to_proto())
                 .collect::<std::result::Result<std::vec::Vec<_>, _>>()?,
             days_since_custom_time: self.days_since_custom_time.map(|v| v.to_proto()).transpose()?,
-            custom_time_before: self.custom_time_before.map(|v| v.to_proto()).transpose()?,
+            custom_time_before: self.custom_time_before.map(|v| <gtype::model::Date as gaxi::prost::ToProto<crate::google::r#type::Date>>::to_proto(v)).transpose()?,
             days_since_noncurrent_time: self.days_since_noncurrent_time.map(|v| v.to_proto()).transpose()?,
-            noncurrent_time_before: self.noncurrent_time_before.map(|v| v.to_proto()).transpose()?,
+            noncurrent_time_before: self.noncurrent_time_before.map(|v| <gtype::model::Date as gaxi::prost::ToProto<crate::google::r#type::Date>>::to_proto(v)).transpose()?,
             matches_prefix: self.matches_prefix
                 .into_iter()
                 .map(|v| v.to_proto())

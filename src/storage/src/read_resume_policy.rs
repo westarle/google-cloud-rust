@@ -40,6 +40,7 @@
 
 use crate::Error;
 use gax::error::rpc::Code;
+use std::error::Error as _;
 
 pub use gax::retry_result::RetryResult as ResumeResult;
 
@@ -141,6 +142,31 @@ impl ReadResumePolicy for Recommended {
 }
 
 fn is_transient(error: &Error) -> bool {
+    // If the error is a ReadError, we can be more specific.
+    if let Some(read_error) = error.source().and_then(|e: &(dyn std::error::Error + 'static)| e.downcast_ref::<crate::error::ReadError>()) {
+        use crate::error::ReadError;
+        return match read_error {
+            ReadError::ChecksumMismatch(_) => true,
+            ReadError::ShortRead(_) => true,
+            ReadError::LongRead { .. } => false,
+            ReadError::UnexpectedSuccessCode(_) => false,
+            ReadError::MissingHeader(_) => false,
+            ReadError::BadHeaderFormat(_, _) => false,
+            #[cfg(google_cloud_unstable_storage_bidi)]
+            ReadError::UnrecoverableBidiReadInterrupt(_) => false,
+            #[cfg(google_cloud_unstable_storage_bidi)]
+            ReadError::BadOffsetInBidiResponse(_) => false,
+            #[cfg(google_cloud_unstable_storage_bidi)]
+            ReadError::BadLengthInBidiResponse(_) => false,
+            #[cfg(google_cloud_unstable_storage_bidi)]
+            ReadError::MissingRangeInBidiResponse => false,
+            #[cfg(google_cloud_unstable_storage_bidi)]
+            ReadError::OutOfOrderBidiResponse { .. } => false,
+            #[cfg(google_cloud_unstable_storage_bidi)]
+            ReadError::UnknownBidiRangeId(_) => false,
+        };
+    }
+
     match error {
         // When using HTTP the only error after the read starts are I/O errors.
         e if e.is_io() => true,

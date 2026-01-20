@@ -86,5 +86,5 @@ tempfile.workspace       = true
 tokio-test.workspace     = true
 tokio.workspace          = true
 # The tests use `unstable-stream`, which is not enabled by default.
-google-cloud-storage = { path = ".", features = ["unstable-stream"] }
+# google-cloud-storage-debug = { path = ".", features = ["unstable-stream"], package = "google-cloud-storage" }
 storage-grpc-mock    = { path = "grpc-mock" }

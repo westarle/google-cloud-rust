@@ -4690,7 +4690,6 @@ dependencies = [
  "google-cloud-longrunning",
  "google-cloud-lro",
  "google-cloud-rpc",
- "google-cloud-storage",
  "google-cloud-type",
  "google-cloud-wkt",
  "http",

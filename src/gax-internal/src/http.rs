@@ -137,7 +137,7 @@ impl ReqwestClient {
         options: gax::options::RequestOptions,
         remaining_time: Option<std::time::Duration>,
         attempt_count: u32,
-    ) -> Result<Response<impl futures::Stream<Item = Result<bytes::Bytes>>>> {
+    ) -> Result<Response<impl futures::Stream<Item = Result<bytes::Bytes>> + 'static>> {
         use futures::TryStreamExt;
 
         builder = self.configure_builder(builder, &options)?;
@@ -145,11 +145,17 @@ impl ReqwestClient {
             .request_attempt(builder, &options, remaining_time, attempt_count)
             .await?;
 
+        let status_code = response.status().as_u16();
         let response = http::Response::from(response);
         let (parts, body) = response.into_parts();
         let stream = http_body_util::BodyStream::new(body)
             .map_ok(|frame| frame.into_data().unwrap_or_default())
             .map_err(Error::io);
+
+        let mut parts = parts;
+        parts
+            .headers
+            .insert("x-goog-status-code", http::HeaderValue::from(status_code));
 
         Ok(Response::from_parts(
             Parts::new().set_headers(parts.headers),

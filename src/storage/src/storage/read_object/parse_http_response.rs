@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::Result;
+
 use crate::error::ReadError;
 use crate::model_ext::ObjectHighlights;
 use crate::storage::v1;
@@ -20,12 +20,24 @@ use base64::Engine;
 use reqwest::header::HeaderMap;
 use serde_with::DeserializeAs;
 
-pub fn object_highlights(generation: i64, headers: &HeaderMap) -> Result<ObjectHighlights> {
+fn parse_content_range_size(headers: &HeaderMap) -> i64 {
+    headers
+        .get("content-range")
+        .and_then(|h| h.to_str().ok())
+        .and_then(|s| s.rsplit('/').next())
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(0)
+}
+
+pub(crate) fn object_highlights(
+    generation: i64,
+    headers: &HeaderMap,
+) -> std::result::Result<ObjectHighlights, ReadError> {
     let get_as_i64 = |header_name: &str| -> i64 {
         headers
             .get(header_name)
-            .and_then(|s| s.to_str().ok())
-            .and_then(|s| s.parse::<i64>().ok())
+            .and_then(|sc| sc.to_str().ok())
+            .and_then(|sc| sc.parse::<i64>().ok())
             .unwrap_or_default()
     };
     let get_as_string = |header_name: &str| -> String {
@@ -38,7 +50,7 @@ pub fn object_highlights(generation: i64, headers: &HeaderMap) -> Result<ObjectH
     Ok(ObjectHighlights {
         generation,
         metageneration: get_as_i64("x-goog-metageneration"),
-        size: get_as_i64("x-goog-stored-content-length"),
+        size: get_as_i64("x-goog-stored-content-length").max(parse_content_range_size(headers)),
         content_encoding: get_as_string("x-goog-stored-content-encoding"),
         storage_class: get_as_string("x-goog-storage-class"),
         content_type: get_as_string("content-type"),
@@ -79,7 +91,13 @@ pub(crate) fn headers_to_md5_hash(headers: &HeaderMap) -> Vec<u8> {
 pub(crate) fn response_generation(
     response: &reqwest::Response,
 ) -> std::result::Result<i64, ReadError> {
-    let header = required_header(response, "x-goog-generation")?;
+    response_generation_from_headers(response.headers())
+}
+
+pub(crate) fn response_generation_from_headers(
+    headers: &HeaderMap,
+) -> std::result::Result<i64, ReadError> {
+    let header = required_header_from_map(headers, "x-goog-generation")?;
     header
         .parse::<i64>()
         .map_err(|e| ReadError::BadHeaderFormat("x-goog-generation", e.into()))
@@ -89,8 +107,14 @@ pub(crate) fn required_header<'a>(
     response: &'a reqwest::Response,
     name: &'static str,
 ) -> std::result::Result<&'a str, ReadError> {
-    let header = response
-        .headers()
+    required_header_from_map(response.headers(), name)
+}
+
+pub(crate) fn required_header_from_map<'a>(
+    headers: &'a HeaderMap,
+    name: &'static str,
+) -> std::result::Result<&'a str, ReadError> {
+    let header = headers
         .get(name)
         .ok_or_else(|| ReadError::MissingHeader(name))?;
     header

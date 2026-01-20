@@ -103,6 +103,8 @@ where
 #[derive(Clone, Debug)]
 pub(crate) struct StorageInner {
     pub client: reqwest::Client,
+    pub http_client: gaxi::http::ReqwestClient,
+    pub use_legacy_transport: bool,
     pub cred: auth::credentials::Credentials,
     pub endpoint: String,
     pub options: RequestOptions,
@@ -297,6 +299,7 @@ impl StorageInner {
     /// Builds a client assuming `config.cred` and `config.endpoint` are initialized, panics otherwise.
     pub(self) fn new(
         client: reqwest::Client,
+        http_client: gaxi::http::ReqwestClient,
         cred: Credentials,
         endpoint: String,
         options: RequestOptions,
@@ -304,6 +307,8 @@ impl StorageInner {
     ) -> Self {
         Self {
             client,
+            http_client,
+            use_legacy_transport: true,
             cred,
             endpoint,
             options,
@@ -325,9 +330,11 @@ impl StorageInner {
             .cred
             .clone()
             .expect("into_parts() assigns default credentials");
+        let http_client = gaxi::http::ReqwestClient::new(config.clone(), &endpoint).await?;
 
         let inner = StorageInner::new(
             client,
+            http_client,
             cred,
             endpoint,
             options,
@@ -498,11 +505,10 @@ impl ClientBuilder {
         self
     }
 
+
+
     /// Configure the retry throttler.
     ///
-    /// Advanced applications may want to configure a retry throttler to
-    /// [Address Cascading Failures] and when [Handling Overload] conditions.
-    /// The client libraries throttle their retry loop, using a policy to
     /// control the throttling algorithm. Use this method to fine tune or
     /// customize the default retry throtler.
     ///

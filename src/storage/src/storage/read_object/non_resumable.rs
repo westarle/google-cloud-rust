@@ -14,33 +14,32 @@
 
 //! Support for non-resumable (e.g. gunzipped) downloads.
 
-use super::parse_http_response;
+
 use super::{Error, Result};
 use crate::model_ext::ObjectHighlights;
+use crate::storage::read_object::StorageHTTPResponse;
 
 #[derive(Debug)]
-pub struct NonResumableResponse {
-    response: Option<reqwest::Response>,
+pub(crate) struct NonResumableResponse {
+    response: StorageHTTPResponse,
     highlights: ObjectHighlights,
 }
 
 impl NonResumableResponse {
-    pub(crate) fn new(response: reqwest::Response) -> Result<Self> {
-        let generation =
-            parse_http_response::response_generation(&response).map_err(Error::deser)?;
-
+    pub(crate) fn new(response: StorageHTTPResponse) -> Result<Self> {
         let headers = response.headers();
-        let highlights = super::parse_http_response::object_highlights(generation, headers)?;
-
+        // println!("DEBUG: Headers: {:?}", headers);
+        let generation = crate::storage::read_object::parse_http_response::response_generation_from_headers(headers)
+            .unwrap_or(0);
+        let highlights = crate::storage::read_object::parse_http_response::object_highlights(
+            generation,
+            headers,
+        )
+        .map_err(Error::io)?;
         Ok(Self {
-            response: Some(response),
+            response,
             highlights,
         })
-    }
-
-    async fn next_attempt(&mut self) -> Option<Result<bytes::Bytes>> {
-        let response = self.response.as_mut()?;
-        response.chunk().await.map_err(Error::io).transpose()
     }
 }
 
@@ -51,12 +50,11 @@ impl crate::read_object::dynamic::ReadObjectResponse for NonResumableResponse {
     }
 
     async fn next(&mut self) -> Option<Result<bytes::Bytes>> {
-        match self.next_attempt().await {
-            None => None,
-            Some(Ok(b)) => Some(Ok(b)),
-            Some(Err(e)) => {
-                self.response = None;
-                Some(Err(e))
+        match &mut self.response {
+            StorageHTTPResponse::Legacy(r) => r.chunk().await.map_err(Error::io).transpose(),
+            StorageHTTPResponse::New { stream, .. } => {
+                use futures::StreamExt;
+                stream.next().await.map(|res: std::result::Result<bytes::Bytes, gax::error::Error>| res.map_err(Error::io))
             }
         }
     }
@@ -142,7 +140,7 @@ mod tests {
             .status(200)
             .header("x-goog-generation", 123456)
             .body(body)?;
-        let mut response = NonResumableResponse::new(reqwest::Response::from(response))?;
+        let mut response = NonResumableResponse::new(StorageHTTPResponse::Legacy(reqwest::Response::from(response)))?;
 
         let chunk = response.next().await;
         assert!(matches!(&chunk, Some(Ok(b)) if b == "hello"), "{chunk:?}");

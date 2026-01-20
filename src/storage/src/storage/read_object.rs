@@ -415,14 +415,58 @@ pub(crate) struct Reader {
     pub options: RequestOptions,
 }
 
+pub(crate) enum StorageHTTPResponse {
+    Legacy(reqwest::Response),
+    New {
+        status: reqwest::StatusCode,
+        headers: reqwest::header::HeaderMap,
+        stream: Box<dyn futures::Stream<Item = std::result::Result<bytes::Bytes, gax::error::Error>> + Send + Unpin + Sync>,
+    },
+}
+
+impl std::fmt::Debug for StorageHTTPResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Legacy(r) => f.debug_tuple("Legacy").field(r).finish(),
+            Self::New { headers, .. } => f
+                .debug_struct("New")
+                .field("headers", headers)
+                .finish_non_exhaustive(),
+        }
+    }
+}
+
+impl StorageHTTPResponse {
+    pub(crate) fn headers(&self) -> &reqwest::header::HeaderMap {
+        match self {
+            Self::Legacy(r) => r.headers(),
+            Self::New { headers, .. } => headers,
+        }
+    }
+
+    pub(crate) fn status(&self) -> http::StatusCode {
+        match self {
+            Self::Legacy(r) => r.status(),
+            Self::New { status, .. } => *status,
+        }
+    }
+}
+
 impl Reader {
-    async fn read(self) -> Result<reqwest::Response> {
+    async fn read(self) -> Result<StorageHTTPResponse> {
+        self.read_with_retry().await
+    }
+
+    async fn read_with_retry(&self) -> Result<StorageHTTPResponse> {
         let throttler = self.options.retry_throttler.clone();
         let retry = self.options.retry_policy.clone();
         let backoff = self.options.backoff_policy.clone();
 
+        // Used in the retry loop, we need to clone the reader because the
+        // future must optionally own the reader.
+        let reader = self.clone();
         gax::retry_loop_internal::retry_loop(
-            async move |_| self.read_attempt().await,
+            async move |_| reader.read_attempt().await,
             async |duration| tokio::time::sleep(duration).await,
             true,
             throttler,
@@ -432,13 +476,66 @@ impl Reader {
         .await
     }
 
-    async fn read_attempt(&self) -> Result<reqwest::Response> {
-        let builder = self.http_request_builder().await?;
-        let response = builder.send().await.map_err(map_send_error)?;
-        if !response.status().is_success() {
-            return gaxi::http::to_http_error(response).await;
+    async fn read_attempt(&self) -> Result<StorageHTTPResponse> {
+        if self.inner.use_legacy_transport {
+            let builder = self.http_request_builder().await?;
+            let response = builder.send().await.map_err(map_send_error)?;
+            if !response.status().is_success() {
+                return gaxi::http::to_http_error(response).await;
+            }
+            Ok(StorageHTTPResponse::Legacy(response))
+        } else {
+            let mut builder = self.http_request_builder_v2()?;
+            // Add x-goog-api-client header
+            builder = builder.header(
+                "x-goog-api-client",
+                crate::storage::info::X_GOOG_API_CLIENT_HEADER.as_str(),
+            );
+            let response = self
+                .inner
+                .http_client
+                .execute_streaming_once(
+                    builder,
+                    self.options.gax(),
+                    None, // remaining_time
+                    0,    // attempt_count
+                )
+                .await?;
+            let status = response
+                .headers()
+                .get("x-goog-status-code")
+                .and_then(|v| v.to_str().ok())
+                .and_then(|s| s.parse::<u16>().ok())
+                .and_then(|s| reqwest::StatusCode::from_u16(s).ok())
+                .unwrap_or(reqwest::StatusCode::OK);
+
+            if !status.is_success() {
+                let headers = response.headers().clone();
+                let (_parts, body) = response.into_parts();
+                use futures::TryStreamExt;
+                let bytes = body
+                    .try_fold(Vec::new(), |mut acc, chunk| async move {
+                        acc.extend_from_slice(&chunk);
+                        Ok(acc)
+                    })
+                    .await?;
+                return Err(crate::Error::http(status.as_u16(), headers, bytes.into()));
+            }
+            let (parts, body) = response.into_parts();
+            let status = parts
+                .headers
+                .get("x-goog-status-code")
+                .and_then(|v| v.to_str().ok())
+                .and_then(|s| s.parse::<u16>().ok())
+                .and_then(|s| reqwest::StatusCode::from_u16(s).ok())
+                .unwrap_or(reqwest::StatusCode::OK);
+
+            Ok(StorageHTTPResponse::New {
+                status,
+                headers: parts.headers,
+                stream: Box::new(body),
+            })
         }
-        Ok(response)
     }
 
     async fn http_request_builder(&self) -> Result<reqwest::RequestBuilder> {
@@ -543,7 +640,103 @@ impl Reader {
         self.inner.apply_auth_headers(builder).await
     }
 
-    fn is_gunzipped(response: &reqwest::Response) -> bool {
+    fn http_request_builder_v2(&self) -> Result<reqwest::RequestBuilder> {
+        // Collect the required bucket and object parameters.
+        let bucket = &self.request.bucket;
+        let bucket_id = bucket
+            .as_str()
+            .strip_prefix("projects/_/buckets/")
+            .ok_or_else(|| {
+                Error::binding(format!(
+                    "malformed bucket name, it must start with `projects/_/buckets/`: {bucket}"
+                ))
+            })?;
+        let object = &self.request.object;
+
+        // Build the request.
+        let path = format!(
+            "storage/v1/b/{bucket_id}/o/{}",
+            enc(object)
+        );
+        let builder = self.inner.http_client.builder(reqwest::Method::GET, path)
+            .query(&[("alt", "media")])
+            .header(
+                "x-goog-api-client",
+                reqwest::header::HeaderValue::from_static(&self::info::X_GOOG_API_CLIENT_HEADER),
+            );
+
+        let builder = if self.options.automatic_decompression {
+            builder
+        } else {
+            // Disable decompressive transcoding: https://cloud.google.com/storage/docs/transcoding
+            //
+            // The default is to decompress objects that have `contentEncoding == "gzip"`. This header
+            // tells Cloud Storage to disable automatic decompression. It has no effect on objects
+            // with a different `contentEncoding` value.
+            builder.header(
+                "accept-encoding",
+                reqwest::header::HeaderValue::from_static("gzip"),
+            )
+        };
+
+        // Add the optional query parameters.
+        let builder = if self.request.generation != 0 {
+            builder.query(&[("generation", self.request.generation)])
+        } else {
+            builder
+        };
+        let builder = self
+            .request
+            .if_generation_match
+            .iter()
+            .fold(builder, |b, v| b.query(&[("ifGenerationMatch", v)]));
+        let builder = self
+            .request
+            .if_generation_not_match
+            .iter()
+            .fold(builder, |b, v| b.query(&[("ifGenerationNotMatch", v)]));
+        let builder = self
+            .request
+            .if_metageneration_match
+            .iter()
+            .fold(builder, |b, v| b.query(&[("ifMetagenerationMatch", v)]));
+        let builder = self
+            .request
+            .if_metageneration_not_match
+            .iter()
+            .fold(builder, |b, v| b.query(&[("ifMetagenerationNotMatch", v)]));
+
+        let builder = apply_customer_supplied_encryption_headers(
+            builder,
+            &self.request.common_object_request_params,
+        );
+
+        // Apply "range" header for read limits and offsets.
+        let builder = match (self.request.read_offset, self.request.read_limit) {
+            // read_limit can't be negative.
+            (_, l) if l < 0 => {
+                unreachable!("ReadObject build never sets a negative read_limit value")
+            }
+            // negative offset can't also have a read_limit.
+            (o, l) if o < 0 && l > 0 => unreachable!(
+                "ReadObject builder never sets a positive read_offset value with a negative read_limit value"
+            ),
+            // If both are zero, we use default implementation (no range header).
+            (0, 0) => builder,
+            // negative offset with no limit means the last N bytes.
+            (o, 0) if o < 0 => builder.header("range", format!("bytes={o}")),
+            // read_limit is zero, means no limit. Read from offset to end of file.
+            // This handles cases like (5, 0) -> "bytes=5-"
+            (o, 0) => builder.header("range", format!("bytes={o}-")),
+            // General case: non-negative offset and positive limit.
+            // This covers cases like (0, 100) -> "bytes=0-99", (5, 100) -> "bytes=5-104"
+            (o, l) => builder.header("range", format!("bytes={o}-{}", o + l - 1)),
+        };
+
+        Ok(builder)
+    }
+
+    fn is_gunzipped(response: &StorageHTTPResponse) -> bool {
         // Cloud Storage automatically [decompresses gzip-compressed][transcoding]
         // objects. Reading such objects comes with a number of restrictions:
         // - Ranged reads do not work.
@@ -1203,7 +1396,7 @@ mod tests {
             .status(200)
             .header(name, value)
             .body(Vec::new())?;
-        let response = reqwest::Response::from(response);
+        let response = StorageHTTPResponse::Legacy(reqwest::Response::from(response));
         let got = Reader::is_gunzipped(&response);
         assert_eq!(got, want, "{response:?}");
         Ok(())

@@ -16,103 +16,138 @@ use super::Reader;
 use super::parse_http_response;
 use crate::model::ObjectChecksums;
 use crate::model_ext::ObjectHighlights;
-use crate::storage::checksum::details::validate;
+
+
+use crate::storage::checksum::details::Checksum as Hasher;
+use crate::model::ObjectChecksums as Hashes;
+
+fn hashes_from_highlights(highlights: &ObjectHighlights) -> Hashes {
+    if let Some(checksums) = &highlights.checksums {
+        checksums.clone()
+    } else {
+        Hashes::new()
+    }
+}
+
+fn new_hasher(hashes: &Hashes) -> Hasher {
+    Hasher {
+        crc32c: hashes.crc32c.map(|_| Default::default()),
+        md5_hash: if hashes.md5_hash.is_empty() {
+            None
+        } else {
+            Some(Default::default())
+        },
+    }
+}
+use crate::storage::read_object::StorageHTTPResponse;
 use crate::{Error, Result, error::ReadError};
 
 /// A response to a [Storage::read_object] request.
 #[derive(Debug)]
 pub(crate) struct ResumableResponse {
     reader: Reader,
-    response: Option<reqwest::Response>,
+    response: Option<StorageHTTPResponse>,
     highlights: ObjectHighlights,
-    // Fields for tracking the crc checksum checks.
-    response_checksums: ObjectChecksums,
-    // Fields for resuming a read request.
-    range: ReadRange,
-    generation: i64,
+    hashes: Hashes,
+    hasher: Hasher,
+    offset: i64,
+    limit: i64,
+    last_seen_generation: i64,
     resume_count: u32,
 }
 
 impl ResumableResponse {
-    pub(crate) fn new(reader: Reader, response: reqwest::Response) -> Result<Self> {
-        let full = reader.request.read_offset == 0 && reader.request.read_limit == 0;
-        let headers = response.headers();
-        let response_checksums = checksums_from_response(full, response.status(), headers);
-        let range = response_range(&response).map_err(Error::deser)?;
-        let generation =
-            parse_http_response::response_generation(&response).map_err(Error::deser)?;
-
-        let highlights = parse_http_response::object_highlights(generation, headers)?;
+    pub(crate) fn new(reader: Reader, response: StorageHTTPResponse) -> Result<Self> {
+        let mut generation = reader.request.generation;
+        if generation == 0 {
+            generation = crate::storage::read_object::parse_http_response::response_generation_from_headers(
+                response.headers(),
+            )
+            .unwrap_or(0);
+        }
+        let highlights = crate::storage::read_object::parse_http_response::object_highlights(
+            generation,
+            response.headers(),
+        )
+        .map_err(Error::io)?;
+        let hashes = hashes_from_highlights(&highlights);
+        let hasher = new_hasher(&hashes);
+        let offset = reader.request.read_offset;
+        let mut limit = reader.request.read_limit;
+        let last_seen_generation = highlights.generation;
+        if limit == 0 && highlights.size > 0 {
+            limit = highlights.size - offset;
+        }
+        // eprintln!("DEBUG: ResumableResponse::new limit={limit} highlights.size={} offset={offset}", highlights.size);
 
         Ok(Self {
             reader,
             response: Some(response),
             highlights,
-            // Fields for computing checksums.
-            response_checksums,
-            // Fields for resuming a read request.
-            range,
-            generation,
+            hashes,
+            hasher,
+            offset,
+            limit,
+            last_seen_generation,
             resume_count: 0,
         })
     }
-}
 
-#[async_trait::async_trait]
-impl crate::read_object::dynamic::ReadObjectResponse for ResumableResponse {
-    fn object(&self) -> ObjectHighlights {
-        self.highlights.clone()
-    }
-
-    async fn next(&mut self) -> Option<Result<bytes::Bytes>> {
-        match self.next_attempt().await {
-            None => None,
-            Some(Ok(b)) => Some(Ok(b)),
-            // Recursive async requires pin:
-            //     https://rust-lang.github.io/async-book/07_workarounds/04_recursion.html
-            Some(Err(e)) => Box::pin(self.resume(e)).await,
-        }
-    }
-}
-
-impl ResumableResponse {
-    async fn next_attempt(&mut self) -> Option<Result<bytes::Bytes>> {
-        let response = self.response.as_mut()?;
-        let res = response.chunk().await.map_err(Error::io);
-        match res {
-            Ok(Some(chunk)) => {
-                self.reader
-                    .options
-                    .checksum
-                    .update(self.range.start, &chunk);
-                let len = chunk.len() as u64;
-                if self.range.limit < len {
-                    return Some(Err(Error::deser(ReadError::LongRead {
-                        expected: self.range.limit,
-                        got: len,
-                    })));
-                }
-                self.range.limit -= len;
-                self.range.start += len;
-                Some(Ok(chunk))
+    async fn next_attempt(&mut self) -> Result<StorageHTTPResponse> {
+        loop {
+            if self.response.is_some() {
+                return Ok(self.response.take().unwrap());
             }
-            Ok(None) => {
-                if self.range.limit != 0 {
-                    return Some(Err(Error::io(ReadError::ShortRead(self.range.limit))));
-                }
-                let computed = self.reader.options.checksum.finalize();
-                let res = validate(&self.response_checksums, &Some(computed));
-                match res {
-                    Err(e) => Some(Err(Error::deser(ReadError::ChecksumMismatch(e)))),
-                    Ok(()) => None,
-                }
+            let response = self.reader.read_with_retry().await;
+            match response {
+                Ok(r) => return Ok(r),
+                Err(e) => self.resume(e).await?,
             }
-            Err(e) => Some(Err(e)),
         }
     }
 
-    async fn resume(&mut self, error: Error) -> Option<Result<bytes::Bytes>> {
-        use crate::read_object::dynamic::ReadObjectResponse;
+    async fn next_chunk_from_response(&mut self) -> Result<Option<bytes::Bytes>> {
+        let chunk = match &mut self.response {
+            Some(StorageHTTPResponse::Legacy(r)) => r.chunk().await.map_err(Error::io)?,
+            Some(StorageHTTPResponse::New { stream, .. }) => {
+                use futures::StreamExt;
+                match stream.next().await {
+                    Some(Ok(bytes)) => Some(bytes),
+                    Some(Err(e)) => return Err(Error::from(e)),
+                    None => None,
+                }
+            }
+            None => return Ok(None),
+        };
+
+        if let Some(data) = &chunk {
+            self.hasher.update(self.offset as u64, data);
+            self.offset += data.len() as i64;
+            if self.limit > 0 {
+                let len = data.len() as i64;
+                if len > self.limit {
+                    return Err(Error::io(ReadError::LongRead {
+                        got: len as u64,
+                        expected: self.limit as u64,
+                    }));
+                }
+                self.limit -= len;
+            }
+        } else {
+            if self.limit != 0 {
+                return Err(Error::io(ReadError::ShortRead(self.limit as u64)));
+            }
+            if self.limit == 0 && self.offset < self.highlights.size {
+                 return Err(Error::io(ReadError::ShortRead((self.highlights.size - self.offset) as u64)));
+            }
+            let computed = self.hasher.finalize();
+            crate::storage::checksum::details::validate(&self.hashes, &Some(computed))
+                .map_err(|e| Error::deser(ReadError::ChecksumMismatch(e)))?;
+        }
+        Ok(chunk)
+    }
+
+    async fn resume(&mut self, error: Error) -> Result<()> {
         use crate::read_resume_policy::{ResumeQuery, ResumeResult};
 
         // The existing read is no longer valid.
@@ -126,17 +161,48 @@ impl ResumableResponse {
             .on_error(&query, error)
         {
             ResumeResult::Continue(_) => {}
-            ResumeResult::Permanent(e) => return Some(Err(e)),
-            ResumeResult::Exhausted(e) => return Some(Err(e)),
+            ResumeResult::Permanent(e) => return Err(e),
+            ResumeResult::Exhausted(e) => return Err(e),
         };
-        self.reader.request.read_offset = self.range.start as i64;
-        self.reader.request.read_limit = self.range.limit as i64;
-        self.reader.request.generation = self.generation;
-        self.response = match self.reader.clone().read().await {
-            Ok(r) => Some(r),
-            Err(e) => return Some(Err(e)),
-        };
-        self.next().await
+        self.reader.request.read_offset = self.offset;
+        self.reader.request.read_limit = self.limit;
+        if self.limit == 0 && self.highlights.size > 0 {
+            self.reader.request.read_limit = self.highlights.size - self.offset;
+        }
+        self.reader.request.generation = self.last_seen_generation;
+
+        let response = self.reader.read_with_retry().await?;
+        self.response = Some(response);
+        Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl crate::read_object::dynamic::ReadObjectResponse for ResumableResponse {
+    fn object(&self) -> ObjectHighlights {
+        self.highlights.clone()
+    }
+
+    async fn next(&mut self) -> Option<Result<bytes::Bytes>> {
+        loop {
+            // Ensure we have an active HTTP response stream.
+            if self.response.is_none() {
+                match self.next_attempt().await {
+                    Ok(r) => self.response = Some(r),
+                    Err(e) => return Some(Err(e)),
+                }
+            }
+
+            match self.next_chunk_from_response().await {
+                Ok(Some(b)) => return Some(Ok(b)),
+                Ok(None) => return None,
+                Err(e) => {
+                    if let Err(resume_err) = self.resume(e).await {
+                        return Some(Err(resume_err));
+                    }
+                }
+            }
+        }
     }
 }
 

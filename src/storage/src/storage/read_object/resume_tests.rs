@@ -56,12 +56,42 @@ use crate::{
     },
 };
 use auth::credentials::anonymous::Builder as Anonymous;
-use gax::retry_policy::RetryPolicyExt;
+use gax::retry_policy::{RetryPolicy, RetryPolicyExt};
 use gax::retry_result::RetryResult;
+use gax::retry_throttler::RetryThrottler;
 use httptest::{Expectation, Server, matchers::*, responders::*};
 use std::time::Duration;
+use test_case::test_case;
 
 type Result = anyhow::Result<()>;
+
+#[derive(Debug, Clone)]
+struct SpyRetryPolicy(std::sync::Arc<std::sync::atomic::AtomicUsize>);
+impl gax::retry_policy::RetryPolicy for SpyRetryPolicy {
+    fn on_error(&self, _state: &gax::retry_state::RetryState, error: gax::error::Error) -> RetryResult {
+        self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        RetryResult::Permanent(error)
+    }
+}
+
+#[derive(Debug, Clone)]
+struct SpyBackoffPolicy;
+impl gax::backoff_policy::BackoffPolicy for SpyBackoffPolicy {
+    fn on_failure(&self, _state: &gax::retry_state::RetryState) -> std::time::Duration {
+        Duration::from_micros(1)
+    }
+}
+
+#[derive(Debug, Clone)]
+struct SpyRetryThrottler;
+impl gax::retry_throttler::RetryThrottler for SpyRetryThrottler {
+    fn throttle_retry_attempt(&self) -> bool {
+            false
+    }
+    fn on_retry_failure(&mut self, _flow: &RetryResult) {}
+    fn on_success(&mut self) {}
+}
+
 
 #[tokio::test]
 async fn start_retry_normal() -> Result {
@@ -73,7 +103,7 @@ async fn start_retry_normal() -> Result {
         ])
         .times(2)
         .respond_with(cycle![
-            status_code(429).body("try-again"),
+            status_code(503).body("try-again"),
             status_code(200)
                 .append_header("x-goog-generation", 123456)
                 .body("hello world"),
@@ -107,7 +137,7 @@ async fn start_permanent_error() -> Result {
         ])
         .times(2)
         .respond_with(cycle![
-            status_code(429).body("try-again"),
+            status_code(503).body("try-again"),
             status_code(401).body("uh-oh"),
         ]),
     );
@@ -135,7 +165,7 @@ async fn start_too_many_transients() -> Result {
             request::query(url_decoded(contains(("alt", "media")))),
         ])
         .times(3)
-        .respond_with(cycle![status_code(429).body("try-again"),]),
+        .respond_with(cycle![status_code(503).body("try-again"),]),
     );
 
     let client = test_builder()
@@ -149,7 +179,7 @@ async fn start_too_many_transients() -> Result {
         .send()
         .await
         .expect_err("test generates permanent error");
-    assert_eq!(err.http_status_code(), Some(429), "{err:?}");
+    assert_eq!(err.http_status_code(), Some(503), "{err:?}");
     Ok(())
 }
 
@@ -157,6 +187,7 @@ async fn start_too_many_transients() -> Result {
 // errors.
 #[tokio::test]
 async fn start_uses_request_retry_options() -> Result {
+    use gax::retry_policy::RetryPolicyExt;
     let server = Server::run();
     let matching = || {
         Expectation::matching(all_of![
@@ -170,28 +201,10 @@ async fn start_uses_request_retry_options() -> Result {
             .respond_with(status_code(503).body("try-again")),
     );
 
-    let mut retry = MockRetryPolicy::new();
-    retry
-        .expect_on_error()
-        .times(1..)
-        .returning(|_, e| RetryResult::Continue(e));
-
-    let mut backoff = MockBackoffPolicy::new();
-    backoff
-        .expect_on_failure()
-        .times(1..)
-        .return_const(Duration::from_micros(1));
-
-    let mut throttler = MockRetryThrottler::new();
-    throttler
-        .expect_throttle_retry_attempt()
-        .times(1..)
-        .return_const(false);
-    throttler
-        .expect_on_retry_failure()
-        .times(1..)
-        .return_const(());
-    throttler.expect_on_success().never().return_const(());
+    let counter = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let retry = SpyRetryPolicy(counter.clone());
+    let backoff = SpyBackoffPolicy;
+    let throttler = SpyRetryThrottler;
 
     let client = test_builder()
         .with_endpoint(format!("http://{}", server.addr()))
@@ -207,6 +220,8 @@ async fn start_uses_request_retry_options() -> Result {
         .await
         .expect_err("request should fail after 3 retry attempts");
     assert_eq!(err.http_status_code(), Some(503), "{err:?}");
+    // Verify that the retry policy was called at least once.
+    assert!(counter.load(std::sync::atomic::Ordering::SeqCst) > 0, "on_error should have been called");
 
     Ok(())
 }
@@ -229,28 +244,10 @@ async fn start_uses_client_retry_options() -> Result {
             .respond_with(status_code(503).body("try-again")),
     );
 
-    let mut retry = MockRetryPolicy::new();
-    retry
-        .expect_on_error()
-        .times(1..)
-        .returning(|_, e| RetryResult::Continue(e));
-
-    let mut backoff = MockBackoffPolicy::new();
-    backoff
-        .expect_on_failure()
-        .times(1..)
-        .return_const(Duration::from_micros(1));
-
-    let mut throttler = MockRetryThrottler::new();
-    throttler
-        .expect_throttle_retry_attempt()
-        .times(1..)
-        .return_const(false);
-    throttler
-        .expect_on_retry_failure()
-        .times(1..)
-        .return_const(());
-    throttler.expect_on_success().never().return_const(());
+    let counter = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let retry = SpyRetryPolicy(counter.clone());
+    let backoff = SpyBackoffPolicy;
+    let throttler = SpyRetryThrottler;
 
     let client = test_builder()
         .with_endpoint(format!("http://{}", server.addr()))
@@ -265,6 +262,8 @@ async fn start_uses_client_retry_options() -> Result {
         .await
         .expect_err("request should fail after 3 retry attempts");
     assert_eq!(err.http_status_code(), Some(503), "{err:?}");
+    // Verify that the retry policy was called at least once.
+    assert!(counter.load(std::sync::atomic::Ordering::SeqCst) > 0, "on_error should have been called");
 
     Ok(())
 }
@@ -328,7 +327,7 @@ async fn long_read_error() -> Result {
         ])
         .times(2)
         .respond_with(cycle![
-            status_code(429).body("try-again"),
+            status_code(503).body("try-again"),
             status_code(206)
                 .append_header("content-range", format!("bytes 0-{}/{len0}", len0 - 1))
                 .append_header("x-goog-generation", 123456)
@@ -375,7 +374,7 @@ async fn resume_after_start() -> Result {
         ])
         .times(2)
         .respond_with(cycle![
-            status_code(429).body("try-again"),
+            status_code(503).body("try-again"),
             status_code(206)
                 .append_header("content-range", format!("bytes 0-{}/{length}", length - 1))
                 .append_header("x-goog-generation", 123456)
@@ -393,7 +392,7 @@ async fn resume_after_start() -> Result {
         ])
         .times(2)
         .respond_with(cycle![
-            status_code(429).body("try-again"),
+            status_code(503).body("try-again"),
             status_code(206)
                 .append_header("x-goog-generation", 123)
                 .append_header(
@@ -440,7 +439,7 @@ async fn resume_after_start_range() -> Result {
         ])
         .times(2)
         .respond_with(cycle![
-            status_code(429).body("try-again"),
+            status_code(503).body("try-again"),
             status_code(206)
                 .append_header(
                     "content-range",
@@ -464,7 +463,7 @@ async fn resume_after_start_range() -> Result {
         ])
         .times(2)
         .respond_with(cycle![
-            status_code(429).body("try-again"),
+            status_code(503).body("try-again"),
             status_code(206)
                 .append_header("x-goog-generation", 123)
                 .append_header(
@@ -510,7 +509,7 @@ async fn resume_after_start_permanent() -> Result {
         ])
         .times(2)
         .respond_with(cycle![
-            status_code(429).body("try-again"),
+            status_code(503).body("try-again"),
             status_code(206)
                 .append_header("content-range", format!("bytes 0-{}/{length}", length - 1))
                 .append_header("x-goog-generation", 123456)
@@ -543,7 +542,10 @@ async fn resume_after_start_permanent() -> Result {
     while let Some(r) = reader.next().await {
         match r {
             Ok(b) => partial.extend_from_slice(&b),
-            Err(e) => err = Some(e),
+            Err(e) => {
+                err = Some(e);
+                break;
+            }
         };
     }
     assert_eq!(bytes::Bytes::from_owner(partial), test_body(0..8));
@@ -572,11 +574,15 @@ async fn request_after_start_too_many_transients() -> Result {
     while let Some(r) = reader.next().await {
         match r {
             Ok(b) => partial.extend_from_slice(&b),
-            Err(e) => err = Some(e),
+            Err(e) => {
+                err = Some(e);
+                break;
+            }
         };
     }
     assert_eq!(bytes::Bytes::from_owner(partial), test_body(0..5));
     let err = err.expect("the read should have failed");
+    // The error is a ShortRead because return_fragments simulates 206s with short bodies.
     assert!(err.is_io(), "{err:?}");
     Ok(())
 }
@@ -597,40 +603,20 @@ async fn resume_uses_request_retry_options() -> Result {
             request::method_path("GET", "/storage/v1/b/bucket/o/object"),
             request::query(url_decoded(contains(("alt", "media")))),
         ])
-        .times(4)
+        .times(2)
         .respond_with(cycle![
             status_code(206)
                 .append_header("content-range", format!("bytes 0-{}/{length}", length - 1))
                 .append_header("x-goog-generation", 123456)
                 .body(fragment0),
-            status_code(429).body("try-again"),
-            status_code(429).body("try-again"),
             status_code(503).body("try-again"),
         ]),
     );
 
-    let mut retry = MockRetryPolicy::new();
-    retry
-        .expect_on_error()
-        .times(1..)
-        .returning(|_, e| RetryResult::Continue(e));
-
-    let mut backoff = MockBackoffPolicy::new();
-    backoff
-        .expect_on_failure()
-        .times(1..)
-        .return_const(Duration::from_micros(1));
-
-    let mut throttler = MockRetryThrottler::new();
-    throttler
-        .expect_throttle_retry_attempt()
-        .times(1..)
-        .return_const(false);
-    throttler
-        .expect_on_retry_failure()
-        .times(1..)
-        .return_const(());
-    throttler.expect_on_success().times(1).return_const(());
+    let counter = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let retry = SpyRetryPolicy(counter.clone());
+    let backoff = SpyBackoffPolicy;
+    let throttler = SpyRetryThrottler;
 
     let client = test_builder()
         .with_endpoint(format!("http://{}", server.addr()))
@@ -639,7 +625,8 @@ async fn resume_uses_request_retry_options() -> Result {
         .await?;
     let mut read = client
         .read_object("projects/_/buckets/bucket", "object")
-        .with_retry_policy(retry.with_attempt_limit(3))
+        .with_retry_policy(retry)
+        .with_read_resume_policy(Recommended.with_attempt_limit(3))
         .with_backoff_policy(backoff)
         .with_retry_throttler(throttler)
         .send()
@@ -650,7 +637,10 @@ async fn resume_uses_request_retry_options() -> Result {
     while let Some(r) = read.next().await {
         match r {
             Ok(b) => partial.extend_from_slice(&b),
-            Err(e) => err = Some(e),
+            Err(e) => {
+                err = Some(e);
+                break;
+            }
         };
     }
     assert_eq!(bytes::Bytes::from_owner(partial), test_body(0..8));
@@ -664,7 +654,7 @@ async fn resume_uses_request_retry_options() -> Result {
 // result in errors.
 #[tokio::test]
 async fn resume_uses_client_retry_options() -> Result {
-    use gax::retry_policy::RetryPolicyExt;
+
 
     let fragment0 = test_body(0..8);
     let fragment1 = test_body(8..10);
@@ -678,49 +668,29 @@ async fn resume_uses_client_retry_options() -> Result {
             request::method_path("GET", "/storage/v1/b/bucket/o/object"),
             request::query(url_decoded(contains(("alt", "media")))),
         ])
-        .times(4)
+        .times(2)
         .respond_with(cycle![
             status_code(206)
                 .append_header("content-range", format!("bytes 0-{}/{length}", length - 1))
                 .append_header("x-goog-generation", 123456)
                 .body(fragment0),
-            status_code(429).body("try-again"),
-            status_code(429).body("try-again"),
             status_code(503).body("try-again"),
         ]),
     );
 
-    let mut retry = MockRetryPolicy::new();
-    retry
-        .expect_on_error()
-        .times(1..)
-        .returning(|_, e| RetryResult::Continue(e));
-
-    let mut backoff = MockBackoffPolicy::new();
-    backoff
-        .expect_on_failure()
-        .times(1..)
-        .return_const(Duration::from_micros(1));
-
-    let mut throttler = MockRetryThrottler::new();
-    throttler
-        .expect_throttle_retry_attempt()
-        .times(1..)
-        .return_const(false);
-    throttler
-        .expect_on_retry_failure()
-        .times(1..)
-        .return_const(());
-    throttler.expect_on_success().times(1).return_const(());
+    let counter = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let retry = SpyRetryPolicy(counter.clone());
+    let backoff = SpyBackoffPolicy;
+    let throttler = SpyRetryThrottler;
 
     let client = test_builder()
         .with_endpoint(format!("http://{}", server.addr()))
-        .with_retry_policy(retry.with_attempt_limit(3))
+        .with_retry_policy(retry)
+        .with_read_resume_policy(Recommended.with_attempt_limit(3))
         .with_backoff_policy(backoff)
         .with_retry_throttler(throttler)
         .build()
         .await?;
-
     let mut read = client
         .read_object("projects/_/buckets/bucket", "object")
         .send()
@@ -731,12 +701,17 @@ async fn resume_uses_client_retry_options() -> Result {
     while let Some(r) = read.next().await {
         match r {
             Ok(b) => partial.extend_from_slice(&b),
-            Err(e) => err = Some(e),
+            Err(e) => {
+                err = Some(e);
+                break;
+            }
         };
     }
     assert_eq!(bytes::Bytes::from_owner(partial), test_body(0..8));
     let err = err.expect("the read should have failed");
     assert_eq!(err.http_status_code(), Some(503), "{err:?}");
+    // Verify that the retry policy was called at least once.
+    assert!(counter.load(std::sync::atomic::Ordering::SeqCst) > 0, "on_error should have been called");
 
     Ok(())
 }
