@@ -377,7 +377,16 @@ impl ReqwestClient {
             Ok(CacheableResource::New { data, .. }) => builder.headers(data),
             Ok(CacheableResource::NotModified) => unreachable!("headers are not cached"),
         };
-        builder.build().map_err(map_send_error)
+
+        let mut request = builder.build().map_err(map_send_error)?;
+
+        #[cfg(google_cloud_unstable_tracing)]
+        crate::observability::propagation::inject_context(
+            &tracing::Span::current(),
+            request.headers_mut(),
+        );
+
+        Ok(request)
     }
 
     async fn request_attempt(
@@ -388,6 +397,7 @@ impl ReqwestClient {
         _attempt_count: u32,
     ) -> Result<reqwest::Response> {
         let request = self.request(builder, options, remaining_time).await?;
+
         #[cfg(google_cloud_unstable_tracing)]
         if self._tracing_enabled {
             return self
@@ -902,6 +912,51 @@ mod tests {
             }
         );
         assert_eq!(result.err().unwrap().http_status_code(), Some(308));
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[cfg(google_cloud_unstable_tracing)]
+    async fn trace_propagation_in_headers() -> TestResult {
+        let server = httptest::Server::run();
+        server.expect(
+            httptest::Expectation::matching(httptest::matchers::all_of![
+                httptest::matchers::request::method_path("GET", "/test-trace"),
+                httptest::matchers::request::headers(httptest::matchers::contains((
+                    "traceparent",
+                    httptest::matchers::any()
+                )))
+            ])
+            .respond_with(httptest::responders::status_code(200)),
+        );
+
+        let mut config = ClientConfig::default();
+        config.cred = Some(Anonymous::new().build());
+        let client = ReqwestClient::new(config, &server.url_str("/")).await?;
+
+        // We need an active span to extract context from
+        let tracer_provider = opentelemetry_sdk::trace::SdkTracerProvider::builder().build();
+        use opentelemetry::trace::TracerProvider as _;
+        let tracer = tracer_provider.tracer("test");
+
+        use tracing_subscriber::layer::SubscriberExt;
+        let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
+        let subscriber = tracing_subscriber::registry().with(telemetry);
+        let dispatcher = tracing::Dispatch::new(subscriber);
+
+        let builder = client.builder(Method::GET, "test-trace".to_string());
+        let options = RequestOptions::default();
+
+        tracing::dispatcher::with_default(&dispatcher, || {
+            let tracing_span = tracing::info_span!("test_request_span");
+
+            async move {
+                let _ = client.request_attempt(builder, &options, None, 0).await;
+            }
+            .instrument(tracing_span)
+        })
+        .await;
+
         Ok(())
     }
 }

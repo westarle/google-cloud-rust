@@ -136,7 +136,9 @@ mod tests {
 
     #[tokio::test]
     async fn query() -> anyhow::Result<()> {
-        let client = ReqwestClient::new(ClientConfig::default(), "http://example.com").await?;
+        let mut config = ClientConfig::default();
+        config.cred = Some(Anonymous::default().build());
+        let client = ReqwestClient::new(config, "http://example.com").await?;
         let request = client
             .http_builder(Method::GET, "/some/path")
             .build_for_tests()
@@ -187,7 +189,9 @@ mod tests {
 
     #[tokio::test]
     async fn body() -> anyhow::Result<()> {
-        let client = ReqwestClient::new(ClientConfig::default(), "http://example.com").await?;
+        let mut config = ClientConfig::default();
+        config.cred = Some(Anonymous::default().build());
+        let client = ReqwestClient::new(config, "http://example.com").await?;
         let request = client
             .http_builder(Method::POST, "/some/path")
             .build_for_tests()
