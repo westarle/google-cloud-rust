@@ -183,10 +183,28 @@ where
         self.inner.poll_ready(cx)
     }
 
-    fn call(&mut self, req: http::Request<B>) -> Self::Future {
+    fn call(&mut self, mut req: http::Request<B>) -> Self::Future {
         let attempt_count = req.extensions().get::<AttemptCount>().map(|a| a.as_i64());
         let resource_name = req.extensions().get::<ResourceName>().map(|r| r.as_str());
         let span = create_grpc_span(req.uri(), &self.layer.inner, attempt_count, resource_name);
+        
+        #[cfg(google_cloud_unstable_tracing)]
+        {
+            let context = tracing_opentelemetry::OpenTelemetrySpanExt::context(
+                &tracing::Span::current(),
+            );
+            opentelemetry::global::get_text_map_propagator(
+                |propagator| {
+                    propagator.inject_context(
+                        &context,
+                        &mut crate::observability::propagation::HeaderInjector(
+                            req.headers_mut(),
+                        ),
+                    )
+                },
+            );
+        }
+
         let future = self.inner.call(req);
         ResponseFuture {
             inner: future,
@@ -220,9 +238,9 @@ impl<S> NoTracingTowerService<S> {
     }
 }
 
-impl<S, Req, ResBody> Service<Req> for NoTracingTowerService<S>
+impl<S, B, ResBody> Service<http::Request<B>> for NoTracingTowerService<S>
 where
-    S: Service<Req, Response = http::Response<ResBody>>,
+    S: Service<http::Request<B>, Response = http::Response<ResBody>>,
     S::Future: Send + 'static,
     ResBody: http_body::Body<Data = bytes::Bytes, Error = tonic::Status> + Send + 'static,
 {
@@ -238,7 +256,24 @@ where
         self.inner.poll_ready(cx)
     }
 
-    fn call(&mut self, req: Req) -> Self::Future {
+    fn call(&mut self, mut req: http::Request<B>) -> Self::Future {
+        #[cfg(google_cloud_unstable_tracing)]
+        {
+            let context = tracing_opentelemetry::OpenTelemetrySpanExt::context(
+                &tracing::Span::current(),
+            );
+            opentelemetry::global::get_text_map_propagator(
+                |propagator| {
+                    propagator.inject_context(
+                        &context,
+                        &mut crate::observability::propagation::HeaderInjector(
+                            req.headers_mut(),
+                        ),
+                    )
+                },
+            );
+        }
+
         NoTracingFuture {
             inner: self.inner.call(req),
             _phantom: std::marker::PhantomData,
@@ -703,5 +738,71 @@ mod tests {
             error_type,
             Some(&AttributeValue::from("CLIENT_CONNECTION_ERROR"))
         );
+    }
+
+    #[test]
+    #[cfg(google_cloud_unstable_tracing)]
+    fn test_grpc_trace_propagation() {
+        let propagator = opentelemetry_sdk::propagation::TraceContextPropagator::new();
+        opentelemetry::global::set_text_map_propagator(propagator);
+
+        let tracer_provider = opentelemetry_sdk::trace::SdkTracerProvider::builder().build();
+        use opentelemetry::trace::TracerProvider as _;
+        let tracer = tracer_provider.tracer("test");
+
+        use tracing_subscriber::layer::SubscriberExt;
+        let telemetry = tracing_opentelemetry::layer().with_tracer(tracer);
+        let subscriber = tracing_subscriber::registry().with(telemetry);
+
+        let _guard = tracing::subscriber::set_default(subscriber);
+
+        // Dummy body
+        struct DummyBody;
+        impl http_body::Body for DummyBody {
+            type Data = bytes::Bytes;
+            type Error = tonic::Status;
+            fn poll_frame(
+                self: std::pin::Pin<&mut Self>,
+                _cx: &mut std::task::Context<'_>,
+            ) -> std::task::Poll<Option<Result<http_body::Frame<Self::Data>, Self::Error>>> {
+                std::task::Poll::Ready(None)
+            }
+        }
+
+        // Dummy service
+        #[derive(Clone)]
+        struct DummyService;
+        impl<B> tower::Service<http::Request<B>> for DummyService {
+            type Response = http::Response<DummyBody>;
+            type Error = std::io::Error;
+            type Future = std::future::Ready<Result<Self::Response, Self::Error>>;
+
+            fn poll_ready(&mut self, _cx: &mut std::task::Context<'_>) -> std::task::Poll<Result<(), Self::Error>> {
+                std::task::Poll::Ready(Ok(()))
+            }
+
+            fn call(&mut self, req: http::Request<B>) -> Self::Future {
+                assert!(req.headers().contains_key("traceparent"));
+                std::future::ready(Ok(http::Response::new(DummyBody)))
+            }
+        }
+
+        let layer = TracingTowerLayer::new(
+            &"http://localhost".parse().unwrap(),
+            "localhost".to_string(),
+            None,
+        );
+
+        let mut svc = layer.layer(DummyService);
+        let req = http::Request::builder()
+            .uri("http://localhost/test")
+            .body(())
+            .unwrap();
+
+        // A tracing span is needed in the test to ensure that tracing::Span::current() works.
+        let tracing_span = tracing::info_span!("test_request_span");
+        let _enter = tracing_span.enter();
+
+        let _future = svc.call(req);
     }
 }
