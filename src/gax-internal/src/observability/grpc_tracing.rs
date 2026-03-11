@@ -191,8 +191,10 @@ where
         #[cfg(google_cloud_unstable_tracing)]
         {
             let context = tracing_opentelemetry::OpenTelemetrySpanExt::context(
-                &tracing::Span::current(),
+                &span, // <--- Extract from the specific child span we just created, not the ambient thread-local span.
             );
+            use opentelemetry::trace::TraceContextExt;
+            println!("Extracted Context - has active span? {}, trace_id: {:?}", context.has_active_span(), context.span().span_context().trace_id());
             opentelemetry::global::get_text_map_propagator(
                 |propagator| {
                     propagator.inject_context(
@@ -202,6 +204,12 @@ where
                         ),
                     )
                 },
+            );
+            
+            // HACK for Spanner E2E prototyping: Force the tracing diagnostic header on all requests
+            req.headers_mut().insert(
+                "x-goog-spanner-end-to-end-tracing",
+                http::HeaderValue::from_static("true"),
             );
         }
 
@@ -260,8 +268,10 @@ where
         #[cfg(google_cloud_unstable_tracing)]
         {
             let context = tracing_opentelemetry::OpenTelemetrySpanExt::context(
-                &tracing::Span::current(),
+                &tracing::Span::current(), // <--- Extract from the ambient thread-local span.
             );
+            use opentelemetry::trace::TraceContextExt;
+            println!("Extracted Context - has active span? {}, trace_id: {:?}", context.has_active_span(), context.span().span_context().trace_id());
             opentelemetry::global::get_text_map_propagator(
                 |propagator| {
                     propagator.inject_context(
@@ -271,6 +281,12 @@ where
                         ),
                     )
                 },
+            );
+            
+            // HACK for Spanner E2E prototyping: Force the tracing diagnostic header on all requests
+            req.headers_mut().insert(
+                "x-goog-spanner-end-to-end-tracing",
+                http::HeaderValue::from_static("true"),
             );
         }
 

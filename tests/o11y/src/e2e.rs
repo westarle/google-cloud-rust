@@ -178,6 +178,7 @@ pub async fn set_up_providers(
             )
             .with(crate::tracing::layer(tracer_provider.clone())),
     )?;
+    opentelemetry::global::set_text_map_propagator(opentelemetry_sdk::propagation::TraceContextPropagator::new());
     opentelemetry::global::set_tracer_provider(tracer_provider.clone());
     opentelemetry::global::set_meter_provider(meter_provider.clone());
     Ok((tracer_provider, meter_provider, buffer))
