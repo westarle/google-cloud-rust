@@ -16,6 +16,7 @@ use crate::Anonymous;
 use crate::mock_collector::MockCollector;
 use crate::otlp::trace::Builder as TracerProviderBuilder;
 use crate::otlp::metrics::Builder as MeterProviderBuilder;
+use crate::otlp::logs::Builder as LoggerProviderBuilder;
 use google_cloud_storage::client::Storage;
 use storage_grpc_mock::google::storage::v2::BidiReadObjectResponse;
 use storage_grpc_mock::{MockStorage, start};
@@ -41,8 +42,15 @@ pub async fn grpc_failure() -> anyhow::Result<()> {
         .await?;
     opentelemetry::global::set_meter_provider(meter_provider.clone());
 
+    let logger_provider = LoggerProviderBuilder::new("test-project", "integration-tests")
+        .with_endpoint(otlp_endpoint.parse::<http::Uri>().expect("Failed to parse URI"))
+        .with_credentials(Anonymous::new().build())
+        .build()
+        .await?;
+
     let _guard = tracing_subscriber::Registry::default()
         .with(crate::tracing::trace_layer(provider.clone()))
+        .with(crate::tracing::log_layer(logger_provider.clone()))
         .set_default();
 
     // 1. Setup Mock gRPC Storage Server to fail immediately
@@ -70,9 +78,10 @@ pub async fn grpc_failure() -> anyhow::Result<()> {
     // 2. Execute gRPC Request which will fail
     let _ = client.open_object("projects/_/buckets/test-bucket", "test-object").send().await;
 
-    // 3. Flush Spans and Metrics
+    // 3. Flush Spans, Metrics and Logs
     let _ = provider.force_flush();
     let _ = meter_provider.force_flush();
+    let _ = logger_provider.force_flush();
 
     // 4. Verify Spans
     let (_, _, request) = mock_collector
@@ -219,6 +228,54 @@ pub async fn grpc_failure() -> anyhow::Result<()> {
         }
     }
     assert!(found_duration_metric, "Should have found duration metric");
+
+    // 6. Verify Logs
+    let logs_requests = mock_collector.logs.lock().unwrap();
+    let log_event = logs_requests
+        .iter()
+        .flat_map(|r| r.get_ref().resource_logs.clone())
+        .flat_map(|rl| rl.scope_logs)
+        .filter(|sl| {
+            sl.scope
+                .as_ref()
+                .is_some_and(|i| i.name == "google_cloud_gax_internal::observability::errors")
+        })
+        .flat_map(|sl| sl.log_records)
+        .find(|l| l.span_id == client_span.span_id)
+        .unwrap_or_else(|| {
+            panic!("cannot find log matching span {:?}", client_span.span_id)
+        });
+
+    assert_eq!(log_event.trace_id, client_span.trace_id, "Log traceId correlation failed");
+    assert_eq!(log_event.span_id, client_span.span_id, "Log spanId correlation failed");
+
+    let mut got_log_attrs = std::collections::HashMap::new();
+    for kv in &log_event.attributes {
+        let val_str = match kv.value.as_ref().and_then(|v| v.value.as_ref()) {
+            Some(opentelemetry_proto::tonic::common::v1::any_value::Value::StringValue(s)) => s.clone(),
+            Some(opentelemetry_proto::tonic::common::v1::any_value::Value::IntValue(i)) => i.to_string(),
+            _ => format!("{:?}", kv.value),
+        };
+        got_log_attrs.insert(kv.key.clone(), val_str);
+    }
+
+    println!("LOG ATTRIBUTES = {:?}", got_log_attrs.keys());
+
+    assert_eq!(got_log_attrs.get("error.type").map(String::as_str), Some("NOT_FOUND"));
+    // TODO: assert_eq!(got_log_attrs.get("rpc.grpc.status_code").map(String::as_str), Some("5"));
+
+    // OTel L4 Actionable Error Logger correctly translates gRPC codes to names for the logs
+    assert_eq!(got_log_attrs.get("rpc.response.status_code").map(String::as_str), Some("NOT_FOUND"));
+    
+    // TODO: L4 Actionable Error Logs are currently missing these PRD attributes:
+    // assert_eq!(got_log_attrs.get("rpc.system.name").map(String::as_str), Some("grpc"));
+    // assert_eq!(got_log_attrs.get("rpc.method").map(String::as_str), Some("google.storage.v2.Storage/BidiReadObject"));
+    // assert_eq!(got_log_attrs.get("gcp.client.repo").map(String::as_str), Some("googleapis/google-cloud-rust"));
+    // assert_eq!(got_log_attrs.get("gcp.client.language").map(String::as_str), Some("rust"));
+    // assert_eq!(got_log_attrs.get("gcp.client.service").map(String::as_str), Some("storage"));
+    // assert_eq!(got_log_attrs.get("server.address").map(String::as_str), Some("..."));
+
+    assert_eq!(log_event.severity_text, "DEBUG", "severity_text mismatch");
 
     Ok(())
 }

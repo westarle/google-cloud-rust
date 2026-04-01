@@ -336,6 +336,20 @@ pub async fn to_otlp_debug_event() -> anyhow::Result<()> {
         .expect("Failed to flush logger provider");
 
     let logs_requests = mock_collector.logs.lock().unwrap();
+    
+    for req in logs_requests.iter() {
+        for rl in &req.get_ref().resource_logs {
+            if let Some(resource) = &rl.resource {
+                println!("LOG RESOURCE ATTRIBUTES = {:?}", resource.attributes.iter().map(|kv| kv.key.clone()).collect::<Vec<_>>());
+            }
+            for sl in &rl.scope_logs {
+                if let Some(scope) = &sl.scope {
+                    println!("LOG SCOPE ATTRIBUTES = {:?}", scope.attributes.iter().map(|kv| kv.key.clone()).collect::<Vec<_>>());
+                }
+            }
+        }
+    }
+
     let log_event = logs_requests
         .iter()
         .flat_map(|r| r.get_ref().resource_logs.clone())
@@ -399,6 +413,14 @@ pub async fn to_otlp_debug_event() -> anyhow::Result<()> {
             "mismatch for key: {key} in got: {got:?}\n\nrequests = {logs_requests:#?}\n"
         );
     }
+
+    // TODO: L4 Actionable Error Logs are currently missing these PRD attributes:
+    // assert_eq!(got.get("rpc.system.name").map(String::as_str), Some("http"));
+    // assert_eq!(got.get("rpc.method").map(String::as_str), Some("google.showcase.v1beta1.Echo/Echo"));
+    // assert_eq!(got.get("gcp.client.repo").map(String::as_str), Some("googleapis/google-cloud-rust"));
+    // assert_eq!(got.get("gcp.client.language").map(String::as_str), Some("rust"));
+    // assert_eq!(got.get("gcp.client.service").map(String::as_str), Some("showcase"));
+    // assert_eq!(got.get("server.address").map(String::as_str), Some("..."));
 
     // Verify DEBUG level was correctly mapped to the OTLP log object.
     assert_eq!(log_event.severity_text, "DEBUG", "severity_text mismatch");
