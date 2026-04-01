@@ -31,3 +31,4 @@ pub mod otlp;
 pub mod storage_tracing;
 #[cfg(google_cloud_unstable_tracing)]
 pub mod tracing;
+pub mod storage_grpc_tracing;
