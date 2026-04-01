@@ -107,6 +107,11 @@ pub async fn to_otlp() -> anyhow::Result<()> {
     // 9. Verify HTTP Span Details
     let client_span = client_span.unwrap();
     assert_eq!(client_span.name, "POST /v1beta1/echo:echo");
+    // Verify signal kind is Client (SPAN_KIND_CLIENT == 3)
+    assert_eq!(client_span.kind, 3);
+    
+    // Verify signal status (0 = UNSET, 1 = OK, 2 = ERROR)
+    assert_eq!(client_span.status.as_ref().unwrap().code, 0);
 
     let attributes: std::collections::HashMap<String, _> = client_span
         .attributes
@@ -123,13 +128,31 @@ pub async fn to_otlp() -> anyhow::Result<()> {
             _ => None,
         })
     };
+    
+    // Helper to get integer value from AnyValue
+    let get_int = |key: &str| -> Option<i64> {
+        attributes.get(key).and_then(|v| match &v.value {
+            Some(opentelemetry_proto::tonic::common::v1::any_value::Value::IntValue(i)) => {
+                Some(*i)
+            }
+            _ => None,
+        })
+    };
 
-    assert_eq!(get_string("http.request.method").as_deref(), Some("POST"));
-    assert_eq!(
-        get_string("gcp.client.repo").as_deref(),
-        Some("googleapis/google-cloud-rust")
-    );
+    assert_eq!(get_string("rpc.system.name").as_deref(), Some("http"));
+    // TODO: assert_eq!(get_string("rpc.method").as_deref(), Some("google.showcase.v1beta1.Echo/Echo"));
+    // TODO: assert_eq!(get_int("rpc.response.status_code"), Some(200));
+    assert!(attributes.contains_key("error.type") == false); // Not expected on success
+
+    assert_eq!(get_string("gcp.client.repo").as_deref(), Some("googleapis/google-cloud-rust"));
+    assert_eq!(get_string("gcp.client.artifact").as_deref(), Some("google-cloud-showcase-v1beta1"));
     assert!(get_string("gcp.client.version").is_some(), "{attributes:?}");
+    assert_eq!(get_string("gcp.client.service").as_deref(), Some("showcase"));
+
+    // TODO: assert!(get_string("gcp.resource.destination.id").is_some(), "{attributes:?}");
+    let actual_addr = get_string("server.address").unwrap();
+    assert!(actual_addr == "127.0.0.1" || actual_addr == "::1", "address was {}", actual_addr);
+    assert!(get_int("server.port").is_some(), "{attributes:?}");
 
     Ok(())
 }
