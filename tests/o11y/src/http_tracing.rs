@@ -218,8 +218,8 @@ pub async fn to_otlp() -> anyhow::Result<()> {
 
                             // TODO: PRD mandates rpc.* semantic conventions for HTTP API calls.
                             // assert_eq!(get_metric_string("rpc.system.name").as_deref(), Some("http"));
-                            // assert_eq!(get_metric_string("rpc.method").as_deref(), Some("google.showcase.v1beta1.Echo/Echo"));
-                            // assert_eq!(get_metric_int("rpc.response.status_code"), Some(200));
+                            // assert_eq!(get_metric_string("rpc.method").as_deref(), Some("google.showcase.v1beta1.Identity/GetUser"));
+                            // assert_eq!(get_metric_string("rpc.response.status_code").as_deref(), Some("OK"));
 
                             // Currently emits OTel HTTP Semantic Conventions instead
                             assert_eq!(get_metric_string("http.request.method").as_deref(), Some("GET"));
