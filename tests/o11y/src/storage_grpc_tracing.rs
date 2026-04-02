@@ -268,13 +268,6 @@ pub async fn grpc_failure() -> anyhow::Result<()> {
     // OTel L4 Actionable Error Logger correctly translates gRPC codes to names for the logs
     assert_eq!(got_log_attrs.get("rpc.response.status_code").map(String::as_str), Some("NOT_FOUND"));
     
-    // TODO: L4 Actionable Error Logs are currently missing these PRD attributes:
-    // assert_eq!(got_log_attrs.get("rpc.system.name").map(String::as_str), Some("grpc"));
-    // assert_eq!(got_log_attrs.get("rpc.method").map(String::as_str), Some("google.storage.v2.Storage/BidiReadObject"));
-    // assert_eq!(got_log_attrs.get("gcp.client.repo").map(String::as_str), Some("googleapis/google-cloud-rust"));
-    // assert_eq!(got_log_attrs.get("gcp.client.language").map(String::as_str), Some("rust"));
-    // assert_eq!(got_log_attrs.get("gcp.client.service").map(String::as_str), Some("storage"));
-    // assert_eq!(got_log_attrs.get("server.address").map(String::as_str), Some("..."));
 
     assert_eq!(log_event.severity_text, "DEBUG", "severity_text mismatch");
 
