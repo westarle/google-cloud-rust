@@ -124,12 +124,98 @@ pub async fn to_otlp() -> anyhow::Result<()> {
         })
     };
 
+    // TODO: PRD mandates rpc.system.name for HTTP API calls.
+    // assert_eq!(get_string("rpc.system.name").as_deref(), Some("http"));
+
+    // Currently emits OTel HTTP Semantic Conventions instead
     assert_eq!(get_string("http.request.method").as_deref(), Some("POST"));
     assert_eq!(
         get_string("gcp.client.repo").as_deref(),
         Some("googleapis/google-cloud-rust")
     );
     assert!(get_string("gcp.client.version").is_some(), "{attributes:?}");
+    assert_eq!(get_string("gcp.client.service").as_deref(), Some("showcase"));
+
+    // TODO: assert!(get_string("gcp.resource.destination.id").is_some(), "{attributes:?}");
+    let actual_addr = get_string("server.address").unwrap();
+    assert!(actual_addr == "127.0.0.1" || actual_addr == "::1", "address was {}", actual_addr);
+    assert!(get_int("server.port").is_some(), "{attributes:?}");
+
+    // 10. Verify Metrics
+    let mut found_duration_metric = false;
+    let mut metrics_requests = mock_collector.metrics.lock().expect("never poisoned");
+    while let Some(req) = metrics_requests.pop() {
+        let (_, _, metrics_request) = req.into_parts();
+        for rm in metrics_request.resource_metrics {
+            for sm in rm.scope_metrics {
+                if let Some(scope) = &sm.scope {
+                    let mut scope_attrs = std::collections::HashMap::new();
+                    for kv in &scope.attributes {
+                        scope_attrs.insert(kv.key.clone(), kv.value.clone().unwrap());
+                    }
+                    let get_scope_string = |key: &str| -> Option<String> {
+                        scope_attrs.get(key).and_then(|v| match &v.value {
+                            Some(opentelemetry_proto::tonic::common::v1::any_value::Value::StringValue(s)) => Some(s.clone()),
+                            _ => None,
+                        })
+                    };
+                    assert_eq!(get_scope_string("gcp.client.repo").as_deref(), Some("googleapis/google-cloud-rust"));
+                    assert_eq!(get_scope_string("gcp.client.artifact").as_deref(), Some("google-cloud-showcase-v1beta1"));
+                    assert!(get_scope_string("gcp.client.version").is_some());
+                    assert_eq!(get_scope_string("gcp.client.service").as_deref(), Some("showcase"));
+                }
+                for m in sm.metrics {
+                    if m.name.contains("test.client.duration") || m.name.contains("gcp.client.request.duration") {
+                        found_duration_metric = true;
+                        // Extract data point
+                        if let Some(opentelemetry_proto::tonic::metrics::v1::metric::Data::Histogram(h)) = m.data {
+                            let point = h.data_points.first().expect("should have a data point");
+                            assert_eq!(point.explicit_bounds, vec![0.0, 0.0001, 0.0005, 0.0010, 0.005, 0.010, 0.050, 0.100, 0.5, 1.0, 5.0, 10.0, 60.0, 300.0, 900.0, 3600.0]);
+                            
+                            let mut metric_attributes = std::collections::HashMap::new();
+                            for kv in &point.attributes {
+                                metric_attributes.insert(kv.key.clone(), kv.value.clone().unwrap());
+                            }
+
+                            let get_metric_string = |key: &str| -> Option<String> {
+                                metric_attributes.get(key).and_then(|v| match &v.value {
+                                    Some(opentelemetry_proto::tonic::common::v1::any_value::Value::StringValue(s)) => {
+                                        Some(s.clone())
+                                    }
+                                    _ => None,
+                                })
+                            };
+                            
+                            let get_metric_int = |key: &str| -> Option<i64> {
+                                metric_attributes.get(key).and_then(|v| match &v.value {
+                                    Some(opentelemetry_proto::tonic::common::v1::any_value::Value::IntValue(i)) => {
+                                        Some(*i)
+                                    }
+                                    _ => None,
+                                })
+                            };
+
+                            // TODO: PRD mandates rpc.* semantic conventions for HTTP API calls.
+                            // assert_eq!(get_metric_string("rpc.system.name").as_deref(), Some("http"));
+                            // assert_eq!(get_metric_string("rpc.method").as_deref(), Some("google.showcase.v1beta1.Echo/Echo"));
+                            // assert_eq!(get_metric_int("rpc.response.status_code"), Some(200));
+
+                            // Currently emits OTel HTTP Semantic Conventions instead
+                            assert_eq!(get_metric_string("http.request.method").as_deref(), Some("POST"));
+                            assert_eq!(get_metric_string("url.template").as_deref(), Some("/v1beta1/echo:echo"));
+                            assert_eq!(get_metric_int("http.response.status_code"), Some(200));
+                            assert!(metric_attributes.contains_key("error.type") == false); 
+
+                            let actual_addr = get_metric_string("server.address").unwrap();
+                            assert!(actual_addr == "127.0.0.1" || actual_addr == "::1", "address was {}", actual_addr);
+                            assert!(get_metric_int("server.port").is_some());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    assert!(found_duration_metric, "Should have found duration metric");
 
     Ok(())
 }
