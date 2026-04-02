@@ -17,15 +17,15 @@ mod http_tracing {
     use google_cloud_test_utils::errors::anydump;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn to_otlp() -> anyhow::Result<()> {
-        integration_tests_o11y::http_tracing::to_otlp()
+    async fn f1_2_f2_2_http_success_case() -> anyhow::Result<()> {
+        integration_tests_o11y::http_tracing::f1_2_f2_2_http_success_case()
             .await
             .inspect_err(anydump)
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    async fn to_otlp_debug_event() -> anyhow::Result<()> {
-        integration_tests_o11y::http_tracing::to_otlp_debug_event()
+    async fn f1_3_f2_3_f3_2_f3_4_http_server_error() -> anyhow::Result<()> {
+        integration_tests_o11y::http_tracing::f1_3_f2_3_f3_2_f3_4_http_server_error()
             .await
             .inspect_err(anydump)
     }

@@ -40,7 +40,7 @@ const EXPECTED_QUERY_PARAMETERS: &str =
 ///
 /// This makes sure that the end-to-end system of tracing to OpenTelemetry
 /// works as intended, value types are preserved, etc.
-pub async fn to_otlp() -> anyhow::Result<()> {
+pub async fn f1_2_f2_2_http_success_case() -> anyhow::Result<()> {
     // 1. Start Mock OTLP Collector
     let mock_collector = MockCollector::default();
     let otlp_endpoint = mock_collector.start().await;
@@ -243,7 +243,7 @@ pub async fn to_otlp() -> anyhow::Result<()> {
 
 /// Validates that an HTTP error carrying AIP-193 ErrorInfo extracts
 /// the metadata and records them as attributes and events exported to OTLP.
-pub async fn to_otlp_debug_event() -> anyhow::Result<()> {
+pub async fn f1_3_f2_3_f3_2_f3_4_http_server_error() -> anyhow::Result<()> {
     let mock_collector = MockCollector::default();
     let otlp_endpoint = mock_collector.start().await;
 

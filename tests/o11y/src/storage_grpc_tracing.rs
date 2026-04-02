@@ -25,7 +25,7 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
 #[tokio::test(flavor = "multi_thread")]
-pub async fn grpc_failure() -> anyhow::Result<()> {
+pub async fn f1_8_f2_8_f3_10_grpc_server_error() -> anyhow::Result<()> {
     let mock_collector = MockCollector::default();
     let otlp_endpoint = mock_collector.start().await;
 
