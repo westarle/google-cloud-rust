@@ -16,7 +16,7 @@ use super::Anonymous;
 use crate::mock_collector::MockCollector;
 use crate::otlp::logs::Builder as LoggerProviderBuilder;
 use crate::otlp::trace::Builder as TracerProviderBuilder;
-use google_cloud_showcase_v1beta1::client::Echo;
+use google_cloud_showcase_v1beta1::client::Identity;
 use google_cloud_test_utils::test_layer::{AttributeValue, TestLayer};
 use httptest::{Expectation, Server, matchers::*, responders::status_code};
 use pretty_assertions::assert_eq;
@@ -28,7 +28,7 @@ use tracing_subscriber::util::SubscriberInitExt;
 ///
 /// A constant to make the expected values slightly more readable.
 const EXPECTED_QUERY_PARAMETERS: &str =
-    "%24alt=json%3Benum-encoding%3Dint&%24apiVersion=v1_20240408";
+    "%24alt=json%3Benum-encoding%3Dint";
 
 /// Validates that HTTP tracing makes it all the way to OTLP collectors like
 /// Cloud Telemetry.
@@ -64,20 +64,20 @@ pub async fn to_otlp() -> anyhow::Result<()> {
         .with(crate::tracing::trace_layer(provider.clone()))
         .set_default();
 
-    // 4. Start Mock HTTP Server (Showcase Echo)
+    // 4. Start Mock HTTP Server (Showcase Identity)
     let echo_server = Server::run();
     echo_server.expect(
         Expectation::matching(all_of![
-            request::method("POST"),
-            request::path("/v1beta1/echo:echo"),
+            request::method("GET"),
+            request::path("/v1beta1/users/test-user"),
         ])
-        .respond_with(status_code(200).body(r#"{"content": "test"}"#)),
+        .respond_with(status_code(200).body(r#"{"name": "users/test-user", "display_name": "Test User", "email": "test@example.com"}"#)),
     );
 
     // 5. Configure Client
     let endpoint = echo_server.url("/").to_string();
     let endpoint = endpoint.trim_end_matches('/');
-    let client = Echo::builder()
+    let client = Identity::builder()
         .with_endpoint(endpoint)
         .with_credentials(Anonymous::new().build())
         .with_tracing()
@@ -85,7 +85,7 @@ pub async fn to_otlp() -> anyhow::Result<()> {
         .await?;
 
     // 6. Make Request
-    let _ = client.echo().set_content("test").send().await;
+    let _ = client.get_user().set_name("users/test-user").send().await;
 
     // 7. Flush Spans
     let _ = provider.force_flush();
@@ -114,7 +114,7 @@ pub async fn to_otlp() -> anyhow::Result<()> {
 
     // 9. Verify HTTP Span Details
     let client_span = client_span.unwrap();
-    assert_eq!(client_span.name, "POST /v1beta1/echo:echo");
+    assert_eq!(client_span.name, "GET /v1beta1/{name}");
 
     let attributes: std::collections::HashMap<String, _> = client_span
         .attributes
@@ -145,7 +145,9 @@ pub async fn to_otlp() -> anyhow::Result<()> {
     // assert_eq!(get_string("rpc.system.name").as_deref(), Some("http"));
 
     // Currently emits OTel HTTP Semantic Conventions instead
-    assert_eq!(get_string("http.request.method").as_deref(), Some("POST"));
+    assert_eq!(get_string("http.request.method").as_deref(), Some("GET"));
+    assert_eq!(get_string("url.template").as_deref(), Some("/v1beta1/{name}"));
+    
     assert_eq!(
         get_string("gcp.client.repo").as_deref(),
         Some("googleapis/google-cloud-rust")
@@ -153,7 +155,7 @@ pub async fn to_otlp() -> anyhow::Result<()> {
     assert!(get_string("gcp.client.version").is_some(), "{attributes:?}");
     assert_eq!(get_string("gcp.client.service").as_deref(), Some("showcase"));
 
-    // TODO: assert!(get_string("gcp.resource.destination.id").is_some(), "{attributes:?}");
+    assert_eq!(get_string("gcp.resource.destination.id").as_deref(), Some("//localhost:7469/users/test-user"));
     let actual_addr = get_string("server.address").unwrap();
     assert!(actual_addr == "127.0.0.1" || actual_addr == "::1", "address was {}", actual_addr);
     assert!(get_int("server.port").is_some(), "{attributes:?}");
@@ -220,8 +222,8 @@ pub async fn to_otlp() -> anyhow::Result<()> {
                             // assert_eq!(get_metric_int("rpc.response.status_code"), Some(200));
 
                             // Currently emits OTel HTTP Semantic Conventions instead
-                            assert_eq!(get_metric_string("http.request.method").as_deref(), Some("POST"));
-                            assert_eq!(get_metric_string("url.template").as_deref(), Some("/v1beta1/echo:echo"));
+                            assert_eq!(get_metric_string("http.request.method").as_deref(), Some("GET"));
+                            assert_eq!(get_metric_string("url.template").as_deref(), Some("/v1beta1/{name}"));
                             assert_eq!(get_metric_int("http.response.status_code"), Some(200));
                             assert!(metric_attributes.contains_key("error.type") == false); 
 
@@ -285,15 +287,15 @@ pub async fn to_otlp_debug_event() -> anyhow::Result<()> {
 
     echo_server.expect(
         Expectation::matching(all_of![
-            request::method("POST"),
-            request::path("/v1beta1/echo:echo"),
+            request::method("GET"),
+            request::path("/v1beta1/users/test-user"),
         ])
         .respond_with(status_code(400).body(error_body)),
     );
 
     let endpoint = echo_server.url("/").to_string();
     let endpoint = endpoint.trim_end_matches('/');
-    let client = Echo::builder()
+    let client = Identity::builder()
         .with_endpoint(endpoint)
         .with_credentials(Anonymous::new().build())
         .with_tracing()
@@ -301,7 +303,7 @@ pub async fn to_otlp_debug_event() -> anyhow::Result<()> {
         .await?;
 
     // Execute the request; expect evaluating to Err
-    let result = client.echo().set_content("test").send().await;
+    let result = client.get_user().set_name("users/test-user").send().await;
     assert!(
         result.is_err(),
         "Expected the request to fail with an HTTP 400 error"
@@ -409,16 +411,16 @@ pub async fn to_otlp_debug_event() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn setup_echo_client() -> (
+async fn setup_identity_client() -> (
     google_cloud_test_utils::test_layer::TestLayerGuard,
     httptest::Server,
-    Echo,
+    Identity,
 ) {
     let guard = TestLayer::initialize();
     let server = Server::run();
     let endpoint = server.url("/").to_string();
     let endpoint = endpoint.trim_end_matches('/');
-    let client = Echo::builder()
+    let client = Identity::builder()
         .with_endpoint(endpoint)
         .with_credentials(Anonymous::new().build())
         .with_tracing()
@@ -430,18 +432,18 @@ async fn setup_echo_client() -> (
 }
 
 pub async fn success_testlayer() -> anyhow::Result<()> {
-    let (guard, echo_server, client) = setup_echo_client().await;
+    let (guard, echo_server, client) = setup_identity_client().await;
     let server_addr = echo_server.addr();
 
     echo_server.expect(
         Expectation::matching(all_of![
-            request::method("POST"),
-            request::path("/v1beta1/echo:echo"),
+            request::method("GET"),
+            request::path("/v1beta1/users/test-user"),
         ])
-        .respond_with(status_code(200).body(r#"{"content": "test"}"#)),
+        .respond_with(status_code(200).body(r#"{"name": "users/test-user", "display_name": "Test User", "email": "test@example.com"}"#)),
     );
 
-    let _ = client.echo().set_content("test").send().await?;
+    let _ = client.get_user().set_name("users/test-user").send().await?;
 
     let spans = TestLayer::capture(&guard);
 
@@ -458,7 +460,7 @@ pub async fn success_testlayer() -> anyhow::Result<()> {
     );
 
     let t3_span = client_request_spans[0];
-    let expected_otel_name = "google_cloud_showcase_v1beta1::client::Echo::echo";
+    let expected_otel_name = "google_cloud_showcase_v1beta1::client::Identity::get_user";
 
     // In general it is bad practice to use the "got" data in a comparison. We
     // care that the key exists, and we cannot hard-code the value because the
@@ -468,7 +470,7 @@ pub async fn success_testlayer() -> anyhow::Result<()> {
         ("otel.name", expected_otel_name.into()),
         ("otel.kind", "Internal".into()),
         ("rpc.system.name", "http".into()),
-        ("rpc.method", "google.showcase.v1beta1.Echo/Echo".into()),
+        ("rpc.method", "google.showcase.v1beta1.Identity/GetUser".into()),
         ("gcp.client.service", "showcase".into()),
         ("gcp.client.version", version.clone()),
         ("gcp.client.repo", "googleapis/google-cloud-rust".into()),
@@ -476,13 +478,14 @@ pub async fn success_testlayer() -> anyhow::Result<()> {
             "gcp.client.artifact",
             "google-cloud-showcase-v1beta1".into(),
         ),
+        // TODO: assert!("gcp.resource.destination.id") when supported by client_request macro
         (
             "gcp.schema.url",
             "https://opentelemetry.io/schemas/1.39.0".into(),
         ),
         ("otel.status_code", "UNSET".into()),
         ("http.response.status_code", 200_i64.into()),
-        ("http.request.method", "POST".into()),
+        ("http.request.method", "GET".into()),
         ("server.address", server_addr.ip().to_string().into()),
         ("server.port", (server_addr.port() as i64).into()),
         ("network.peer.address", server_addr.ip().to_string().into()),
@@ -490,7 +493,7 @@ pub async fn success_testlayer() -> anyhow::Result<()> {
         (
             "url.full",
             format!(
-                "http://{}/v1beta1/echo:echo?{EXPECTED_QUERY_PARAMETERS}",
+                "http://{}/v1beta1/users/test-user?{EXPECTED_QUERY_PARAMETERS}",
                 server_addr
             )
             .into(),
@@ -507,19 +510,19 @@ pub async fn success_testlayer() -> anyhow::Result<()> {
 }
 
 pub async fn parse_error() -> anyhow::Result<()> {
-    let (guard, echo_server, client) = setup_echo_client().await;
+    let (guard, echo_server, client) = setup_identity_client().await;
     let server_addr = echo_server.addr();
 
     // Return invalid JSON (missing closing brace)
     echo_server.expect(
         Expectation::matching(all_of![
-            request::method("POST"),
-            request::path("/v1beta1/echo:echo"),
+            request::method("GET"),
+            request::path("/v1beta1/users/test-user"),
         ])
-        .respond_with(status_code(200).body(r#"{"content": "test""#)),
+        .respond_with(status_code(200).body(r#"{"name": "users/test-user""#)),
     );
 
-    let result = client.echo().set_content("test").send().await;
+    let result = client.get_user().set_name("users/test-user").send().await;
     assert!(result.is_err(), "Request should fail due to parse error");
 
     let spans = TestLayer::capture(&guard);
@@ -537,7 +540,7 @@ pub async fn parse_error() -> anyhow::Result<()> {
     );
 
     let t3_span = client_request_spans[0];
-    let expected_otel_name = "google_cloud_showcase_v1beta1::client::Echo::echo";
+    let expected_otel_name = "google_cloud_showcase_v1beta1::client::Identity::get_user";
 
     // In general it is bad practice to use the "got" data in a comparison. We
     // care that the key exists, and we cannot hard-code the value because the
@@ -547,7 +550,7 @@ pub async fn parse_error() -> anyhow::Result<()> {
         ("otel.name", expected_otel_name.into()),
         ("otel.kind", "Internal".into()),
         ("rpc.system.name", "http".into()),
-        ("rpc.method", "google.showcase.v1beta1.Echo/Echo".into()),
+        ("rpc.method", "google.showcase.v1beta1.Identity/GetUser".into()),
         ("gcp.client.service", "showcase".into()),
         ("gcp.client.version", version.clone()),
         ("gcp.client.repo", "googleapis/google-cloud-rust".into()),
@@ -555,17 +558,18 @@ pub async fn parse_error() -> anyhow::Result<()> {
             "gcp.client.artifact",
             "google-cloud-showcase-v1beta1".into(),
         ),
+        // TODO: assert!("gcp.resource.destination.id") when supported by client_request macro
         (
             "gcp.schema.url",
             "https://opentelemetry.io/schemas/1.39.0".into(),
         ),
         ("otel.status_code", "ERROR".into()),
         ("http.response.status_code", 200_i64.into()),
-        ("http.request.method", "POST".into()),
+        ("http.request.method", "GET".into()),
         ("error.type", "CLIENT_RESPONSE_DECODE_ERROR".into()),
         (
             "otel.status_description",
-            "cannot deserialize the response EOF while parsing an object at line 1 column 18"
+            "cannot deserialize the response EOF while parsing an object at line 1 column 26"
                 .into(),
         ),
         ("server.address", server_addr.ip().to_string().into()),
@@ -575,7 +579,7 @@ pub async fn parse_error() -> anyhow::Result<()> {
         (
             "url.full",
             format!(
-                "http://{}/v1beta1/echo:echo?{EXPECTED_QUERY_PARAMETERS}",
+                "http://{}/v1beta1/users/test-user?{EXPECTED_QUERY_PARAMETERS}",
                 server_addr
             )
             .into(),
@@ -595,19 +599,19 @@ pub async fn api_error() -> anyhow::Result<()> {
     use google_cloud_test_utils::test_layer::{AttributeValue, TestLayer};
     use httptest::{Expectation, matchers::*, responders::status_code};
 
-    let (guard, echo_server, client) = setup_echo_client().await;
+    let (guard, echo_server, client) = setup_identity_client().await;
     let server_addr = echo_server.addr();
 
     // 404 Not Found
     echo_server.expect(
         Expectation::matching(all_of![
-            request::method("POST"),
-            request::path("/v1beta1/echo:echo"),
+            request::method("GET"),
+            request::path("/v1beta1/users/test-user"),
         ])
         .respond_with(status_code(404).body(r#"{"error": {"code": 404, "message": "Not Found"}}"#)),
     );
 
-    let result = client.echo().set_content("test").send().await;
+    let result = client.get_user().set_name("users/test-user").send().await;
     assert!(result.is_err(), "Request should fail with API error");
 
     let spans = TestLayer::capture(&guard);
@@ -625,7 +629,7 @@ pub async fn api_error() -> anyhow::Result<()> {
     );
 
     let t3_span = client_request_spans[0];
-    let expected_otel_name = "google_cloud_showcase_v1beta1::client::Echo::echo";
+    let expected_otel_name = "google_cloud_showcase_v1beta1::client::Identity::get_user";
 
     // In general it is bad practice to use the "got" data in a comparison. We
     // care that the key exists, and we cannot hard-code the value because the
@@ -635,7 +639,7 @@ pub async fn api_error() -> anyhow::Result<()> {
         ("otel.name", expected_otel_name.into()),
         ("otel.kind", "Internal".into()),
         ("rpc.system.name", "http".into()),
-        ("rpc.method", "google.showcase.v1beta1.Echo/Echo".into()),
+        ("rpc.method", "google.showcase.v1beta1.Identity/GetUser".into()),
         ("gcp.client.service", "showcase".into()),
         ("gcp.client.version", version.clone()),
         ("gcp.client.repo", "googleapis/google-cloud-rust".into()),
@@ -643,12 +647,13 @@ pub async fn api_error() -> anyhow::Result<()> {
             "gcp.client.artifact",
             "google-cloud-showcase-v1beta1".into(),
         ),
+        // TODO: assert!("gcp.resource.destination.id") when supported by client_request macro
         (
             "gcp.schema.url",
             "https://opentelemetry.io/schemas/1.39.0".into(),
         ),
         ("otel.status_code", "ERROR".into()),
-        ("http.request.method", "POST".into()),
+        ("http.request.method", "GET".into()),
         ("http.response.status_code", 404_i64.into()),
         ("error.type", "UNKNOWN".into()),
         (
@@ -662,7 +667,7 @@ pub async fn api_error() -> anyhow::Result<()> {
         (
             "url.full",
             format!(
-                "http://{}/v1beta1/echo:echo?{EXPECTED_QUERY_PARAMETERS}",
+                "http://{}/v1beta1/users/test-user?{EXPECTED_QUERY_PARAMETERS}",
                 server_addr
             )
             .into(),
