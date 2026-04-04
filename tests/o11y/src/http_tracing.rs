@@ -40,6 +40,57 @@ const EXPECTED_QUERY_PARAMETERS: &str =
 ///
 /// This makes sure that the end-to-end system of tracing to OpenTelemetry
 /// works as intended, value types are preserved, etc.
+pub async fn f1_1_http_disablement() -> anyhow::Result<()> {
+    let mock_collector = MockCollector::default();
+    let otlp_endpoint = mock_collector.start().await;
+
+    let provider = TracerProviderBuilder::new("test-project", "integration-tests")
+        .with_endpoint(otlp_endpoint.clone())
+        .with_credentials(Anonymous::new().build())
+        .build()
+        .await?;
+
+    let _guard = tracing_subscriber::Registry::default()
+        .with(crate::tracing::trace_layer(provider.clone()))
+        .set_default();
+
+    let echo_server = Server::run();
+    echo_server.expect(
+        Expectation::matching(all_of![
+            request::method("GET"),
+            request::path("/v1beta1/users/test-user"),
+        ])
+        .respond_with(status_code(200).body(r#"{"name": "users/test-user", "display_name": "Test User", "email": "test@example.com"}"#)),
+    );
+
+    let endpoint = echo_server.url("/").to_string();
+    let endpoint = endpoint.trim_end_matches('/');
+    // Intentionally omit .with_tracing()
+    let client = Identity::builder()
+        .with_endpoint(endpoint)
+        .with_credentials(Anonymous::new().build())
+        .build()
+        .await?;
+
+    let _ = client.get_user().set_name("users/test-user").send().await;
+
+    let _ = provider.force_flush();
+
+    let mut traces_lock = mock_collector.traces.lock().expect("never poisoned");
+    for request in traces_lock.drain(..) {
+        let (_, _, req) = request.into_parts();
+        for rs in req.resource_spans {
+            for ss in rs.scope_spans {
+                for span in ss.spans {
+                    assert_ne!(span.kind, 3, "Should not emit CLIENT spans when disabled");
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
 pub async fn f1_2_f2_2_http_success_case() -> anyhow::Result<()> {
     // 1. Start Mock OTLP Collector
     let mock_collector = MockCollector::default();

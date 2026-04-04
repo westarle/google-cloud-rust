@@ -17,6 +17,13 @@ mod http_tracing {
     use google_cloud_test_utils::errors::anydump;
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn f1_1_http_disablement() -> anyhow::Result<()> {
+        integration_tests_o11y::http_tracing::f1_1_http_disablement()
+            .await
+            .inspect_err(anydump)
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn f1_2_f2_2_http_success_case() -> anyhow::Result<()> {
         integration_tests_o11y::http_tracing::f1_2_f2_2_http_success_case()
             .await
