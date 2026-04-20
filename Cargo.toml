@@ -62,6 +62,7 @@ default-members = [
 members = [
   "guide/samples",
   "src/auth",
+  "src/auth-uniffi",
   "src/bigquery",
   "src/bigtable",
   "src/datastore",
@@ -336,6 +337,7 @@ members = [
   "tests/storage",
   "tools/check-copyright",
   "tools/minimal-version-helper",
+  "tools/swift-packager",
 ]
 
 [workspace.package]
@@ -399,6 +401,7 @@ toml_edit             = { default-features = false, version = "0.25" }
 tracing-log           = { default-features = false, version = "0.2" }
 tracing-opentelemetry = { default-features = false, version = "0.32" }
 tracing-subscriber    = { default-features = false, version = "0.3.23" }
+uniffi                = { default-features = false, version = "=0.31.0" }
 url                   = { default-features = false, version = "2.4" }
 uuid                  = { default-features = false, version = "1.22", features = ["v4"] }
 
