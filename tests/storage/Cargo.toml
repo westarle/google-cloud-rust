@@ -49,6 +49,7 @@ tracing-subscriber          = { workspace = true, features = ["fmt"] }
 
 [dev-dependencies]
 test-case.workspace = true
+rustls = { workspace = true, features = ["aws_lc_rs"] }
 
 [lints]
 workspace = true

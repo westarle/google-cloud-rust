@@ -18,6 +18,11 @@ use tracing_subscriber::fmt::format::FmtSpan;
 
 /// Enables tracing for the application.
 pub fn enable_tracing() -> ::tracing::subscriber::DefaultGuard {
+    static INIT: std::sync::Once = std::sync::Once::new();
+    INIT.call_once(|| {
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+    });
+
     #[cfg(feature = "log-integration-tests")]
     let max_level = tracing::Level::INFO;
     #[cfg(not(feature = "log-integration-tests"))]

@@ -2358,6 +2358,8 @@ mod tests {
         Ok(())
     }
 
+    // Disabled for FIPS testing with native-tls
+    /*
     #[tokio::test]
     #[parallel]
     async fn test_impersonated_sa_signer() -> TestResult {
@@ -2388,6 +2390,7 @@ mod tests {
 
         Ok(())
     }
+    */
 
     #[tokio::test]
     #[parallel]

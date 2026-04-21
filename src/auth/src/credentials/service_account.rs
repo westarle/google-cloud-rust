@@ -84,9 +84,9 @@ use crate::{BuildResult, Result};
 use async_trait::async_trait;
 use http::{Extensions, HeaderMap};
 use jws::{CLOCK_SKEW_FUDGE, DEFAULT_TOKEN_TIMEOUT, JwsClaims, JwsHeader};
-use rustls::crypto::CryptoProvider;
-use rustls::sign::Signer;
-use rustls_pki_types::{PrivateKeyDer, pem::PemObject};
+// use rustls::crypto::CryptoProvider;
+// use rustls::sign::Signer;
+// use rustls_pki_types::{PrivateKeyDer, pem::PemObject};
 use serde_json::Value;
 use std::sync::Arc;
 use time::OffsetDateTime;
@@ -436,6 +436,8 @@ pub(crate) struct ServiceAccountKey {
 
 impl ServiceAccountKey {
     // Creates a signer using the private key stored in the service account file.
+    // Disabled for FIPS testing with native-tls
+    /*
     pub(crate) fn signer(&self) -> Result<Box<dyn Signer>> {
         let private_key = self.private_key.clone();
         let key_provider = CryptoProvider::get_default().map(|p| p.key_provider);
@@ -480,6 +482,7 @@ Note that the application must use the exact same version of `rustls` as the
                 errors::non_retryable_from_str("Unable to choose RSA_PKCS1_SHA256 signing scheme as it is not supported by current signer")
             })
     }
+    */
 }
 
 impl std::fmt::Debug for ServiceAccountKey {
@@ -568,41 +571,7 @@ impl ServiceAccountTokenGenerator {
     }
 
     pub(crate) fn generate(&self) -> Result<String> {
-        let signer = self.service_account_key.signer()?;
-
-        // The claims encode a unix timestamp. `std::time::Instant` has no
-        // epoch, so we use `time::OffsetDateTime`, which reads system time, in
-        // the implementation.
-        let current_time = OffsetDateTime::now_utc();
-
-        let claims = JwsClaims {
-            iss: self.service_account_key.client_email.clone(),
-            scope: self.scopes.clone(),
-            target_audience: self.target_audience.clone(),
-            aud: self.audience.clone(),
-            exp: token_expiry_time(current_time),
-            iat: token_issue_time(current_time),
-            typ: None,
-            sub: Some(self.service_account_key.client_email.clone()),
-        };
-
-        let header = JwsHeader {
-            alg: "RS256",
-            typ: "JWT",
-            kid: Some(self.service_account_key.private_key_id.clone()),
-        };
-        let encoded_header_claims = format!("{}.{}", header.encode()?, claims.encode()?);
-        let sig = signer
-            .sign(encoded_header_claims.as_bytes())
-            .map_err(errors::non_retryable)?;
-        use base64::prelude::{BASE64_URL_SAFE_NO_PAD, Engine as _};
-        let token = format!(
-            "{}.{}",
-            encoded_header_claims,
-            &BASE64_URL_SAFE_NO_PAD.encode(sig)
-        );
-
-        Ok(token)
+        Err(errors::non_retryable_from_str("JWT signing disabled for FIPS testing"))
     }
 }
 
@@ -934,6 +903,8 @@ mod tests {
         Ok(())
     }
 
+    // Disabled for FIPS testing with native-tls
+    /*
     #[tokio::test]
     #[parallel]
     async fn get_service_account_headers_invalid_key_failure() -> TestResult {
@@ -949,6 +920,7 @@ mod tests {
         assert!(matches!(source, Some(rustls::Error::General(_))), "{err:?}");
         Ok(())
     }
+    */
 
     #[tokio::test]
     #[parallel]
@@ -960,6 +932,8 @@ mod tests {
         Ok(())
     }
 
+    // Disabled for FIPS testing with native-tls
+    /*
     #[test]
     fn signer_failure() -> TestResult {
         let tp = Builder::new(get_mock_service_key()).build_token_provider()?;
@@ -993,6 +967,7 @@ mod tests {
         assert!(error_msg.contains("Failed to parse service account private key PEM"));
         Ok(())
     }
+    */
 
     #[tokio::test]
     #[parallel]

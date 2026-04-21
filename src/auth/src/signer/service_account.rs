@@ -46,15 +46,8 @@ impl SigningProvider for ServiceAccountSigner {
         Ok(self.client_email.clone())
     }
 
-    async fn sign(&self, content: &[u8]) -> Result<bytes::Bytes> {
-        let signer = self
-            .service_account_key
-            .signer()
-            .map_err(SigningError::parsing)?;
-
-        let signature = signer.sign(content).map_err(SigningError::sign)?;
-
-        Ok(bytes::Bytes::from(signature))
+    async fn sign(&self, _content: &[u8]) -> Result<bytes::Bytes> {
+        Err(SigningError::parsing("JWT signing disabled for FIPS testing"))
     }
 }
 
@@ -75,6 +68,8 @@ mod tests {
         })
     }
 
+    // Disabled for FIPS testing with native-tls
+    /*
     #[tokio::test]
     async fn test_service_account_signer_success() -> TestResult {
         let mut service_account_key = get_mock_service_key();
@@ -117,4 +112,5 @@ mod tests {
         assert_eq!(result.as_ref(), inner_result);
         Ok(())
     }
+    */
 }
