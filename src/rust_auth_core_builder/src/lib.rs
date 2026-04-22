@@ -14,8 +14,6 @@ pub fn build_bindings(language: &str) -> Result<GeneratedPaths, Box<dyn std::err
             "--package",
             "rust_auth_core",
             "--release",
-            "--target",
-            "x86_64-unknown-linux-gnu",
         ])
         .status()?;
 
@@ -25,7 +23,7 @@ pub fn build_bindings(language: &str) -> Result<GeneratedPaths, Box<dyn std::err
 
     println!("Generating foreign bindings calling uniffi-bindgen binary...");
     let current_dir = std::env::current_dir()?;
-    let lib_path = current_dir.join("target/x86_64-unknown-linux-gnu/release/librust_auth_core.so");
+    let lib_path = current_dir.join("target/release/librust_auth_core.dylib");
     
     let bindgen_status = std::process::Command::new("cargo")
         .args([
