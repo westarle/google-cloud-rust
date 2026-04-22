@@ -10,3 +10,7 @@ repository.workspace   = true
 rust-version.workspace = true
 
 [dependencies]
+zip = { workspace = true }
+clap = { workspace = true, features = ["derive", "std"] }
+cargo_metadata = { workspace = true }
+rust_auth_core_builder = { path = "../../src/rust_auth_core_builder" }

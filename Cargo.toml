@@ -62,7 +62,7 @@ default-members = [
 members = [
   "guide/samples",
   "src/auth",
-  "src/auth-uniffi",
+  "src/rust_auth_core",
   "src/bigquery",
   "src/bigtable",
   "src/datastore",
@@ -337,7 +337,7 @@ members = [
   "tests/storage",
   "tools/check-copyright",
   "tools/minimal-version-helper",
-  "tools/swift-packager",
+  "tools/swift-packager", "src/rust_auth_core_builder",
 ]
 
 [workspace.package]
@@ -360,6 +360,8 @@ inherits    = "dev"
 incremental = false
 
 [workspace.dependencies]
+zip                   = { default-features = false, version = "0.6", features = ["deflate"] }
+uniffi_bindgen        = { default-features = false, version = "0.31.0" }
 async-trait           = { default-features = false, version = "0.1.85" }
 base64                = { default-features = false, version = "0.22", features = ["std"] }
 bytes                 = { default-features = false, version = "1.10", features = ["serde"] }
