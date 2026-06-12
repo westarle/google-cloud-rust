@@ -623,9 +623,9 @@ impl Builder {
             }
             AdcContents::FallbackToMds => None,
         };
-        let quota_project_id = std::env::var(GOOGLE_CLOUD_QUOTA_PROJECT_VAR)
-            .ok()
-            .or(self.quota_project_id);
+        let quota_project_id = self
+            .quota_project_id
+            .or_else(|| std::env::var(GOOGLE_CLOUD_QUOTA_PROJECT_VAR).ok());
         build_credentials(
             json_data,
             quota_project_id,
@@ -658,9 +658,9 @@ impl Builder {
             }
             AdcContents::FallbackToMds => None,
         };
-        let quota_project_id = std::env::var(GOOGLE_CLOUD_QUOTA_PROJECT_VAR)
-            .ok()
-            .or(self.quota_project_id);
+        let quota_project_id = self
+            .quota_project_id
+            .or_else(|| std::env::var(GOOGLE_CLOUD_QUOTA_PROJECT_VAR).ok());
         build_signer(
             json_data,
             quota_project_id,
@@ -1426,6 +1426,25 @@ pub(crate) mod tests {
 
         let mds = Builder::default()
             .with_quota_project_id("test-quota-project")
+            .build()
+            .unwrap();
+        let fmt = format!("{mds:?}");
+        assert!(fmt.contains("MDSCredentials"));
+        assert!(
+            fmt.contains("test-quota-project"),
+            "Expected 'test-quota-project', got: {fmt}"
+        );
+    }
+
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn create_access_token_credentials_fallback_to_mds_with_quota_project_env_var() {
+        let _e1 = ScopedEnv::remove("GOOGLE_APPLICATION_CREDENTIALS");
+        let _e2 = ScopedEnv::remove("HOME"); // For posix
+        let _e3 = ScopedEnv::remove("APPDATA"); // For windows
+        let _e4 = ScopedEnv::set(GOOGLE_CLOUD_QUOTA_PROJECT_VAR, "env-quota-project");
+
+        let mds = Builder::default()
             .build()
             .unwrap();
         let fmt = format!("{mds:?}");
