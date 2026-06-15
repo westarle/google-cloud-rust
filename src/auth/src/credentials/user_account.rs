@@ -383,7 +383,7 @@ impl Builder {
         let token_provider = UserTokenProvider {
             client_id: authorized_user.client_id,
             client_secret: authorized_user.client_secret,
-            refresh_token: authorized_user.refresh_token,
+            refresh_token: std::sync::RwLock::new(authorized_user.refresh_token),
             endpoint,
             scopes: self.scopes.map(|scopes| scopes.join(" ")),
             source: UserTokenSource::AccessToken,
@@ -398,14 +398,24 @@ impl Builder {
     }
 }
 
-#[derive(PartialEq)]
 pub(crate) struct UserTokenProvider {
     client_id: String,
     client_secret: String,
-    refresh_token: String,
+    refresh_token: std::sync::RwLock<String>,
     endpoint: String,
     scopes: Option<String>,
     source: UserTokenSource,
+}
+
+impl PartialEq for UserTokenProvider {
+    fn eq(&self, other: &Self) -> bool {
+        self.client_id == other.client_id
+            && self.client_secret == other.client_secret
+            && *self.refresh_token.read().unwrap() == *other.refresh_token.read().unwrap()
+            && self.endpoint == other.endpoint
+            && self.scopes == other.scopes
+            && self.source == other.source
+    }
 }
 
 #[derive(PartialEq)]
@@ -439,7 +449,7 @@ impl UserTokenProvider {
         UserTokenProvider {
             client_id: authorized_user.client_id,
             client_secret: authorized_user.client_secret,
-            refresh_token: authorized_user.refresh_token,
+            refresh_token: std::sync::RwLock::new(authorized_user.refresh_token),
             endpoint,
             source: UserTokenSource::IdToken,
             scopes: None,
@@ -457,7 +467,7 @@ impl TokenProvider for UserTokenProvider {
             grant_type: RefreshGrantType::RefreshToken,
             client_id: self.client_id.clone(),
             client_secret: self.client_secret.clone(),
-            refresh_token: self.refresh_token.clone(),
+            refresh_token: self.refresh_token.read().unwrap().clone(),
             scopes: self.scopes.clone(),
         };
         let header = HeaderValue::from_static("application/json");
@@ -479,6 +489,12 @@ impl TokenProvider for UserTokenProvider {
             let retryable = !e.is_decode();
             CredentialsError::from_source(retryable, e)
         })?;
+
+        if let Some(new_rt) = &response.refresh_token {
+            if let Ok(mut rt) = self.refresh_token.write() {
+                *rt = new_rt.clone();
+            }
+        }
 
         let token = match self.source {
             UserTokenSource::AccessToken => Ok(response.access_token),
@@ -698,7 +714,7 @@ mod tests {
         let expected = UserTokenProvider {
             client_id: "test-client-id".to_string(),
             client_secret: "test-client-secret".to_string(),
-            refresh_token: "test-refresh-token".to_string(),
+            refresh_token: std::sync::RwLock::new("test-refresh-token".to_string()),
             endpoint: OAUTH2_TOKEN_SERVER_URL.to_string(),
             scopes: Some("https://www.googleapis.com/auth/pubsub".to_string()),
             source: UserTokenSource::AccessToken,
@@ -994,7 +1010,7 @@ mod tests {
         let tp = UserTokenProvider {
             client_id: "test-client-id".to_string(),
             client_secret: "test-client-secret".to_string(),
-            refresh_token: "test-refresh-token".to_string(),
+            refresh_token: std::sync::RwLock::new("test-refresh-token".to_string()),
             endpoint: server.url("/token").to_string(),
             scopes: Some("scope1 scope2".to_string()),
             source: UserTokenSource::AccessToken,
