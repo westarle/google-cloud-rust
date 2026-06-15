@@ -963,6 +963,19 @@ mod tests {
         Ok(())
     }
 
+    #[tokio::test]
+    #[parallel]
+    async fn get_service_account_missing_fields_failure() -> TestResult {
+        let required_fields = ["client_email", "private_key_id", "private_key", "project_id"];
+        for field in required_fields {
+            let mut service_account_key = get_mock_service_key();
+            service_account_key.as_object_mut().unwrap().remove(field);
+            let e = Builder::new(service_account_key).build().unwrap_err();
+            assert!(e.is_parsing(), "Expected parsing error when field '{field}' is missing, got: {e:?}");
+        }
+        Ok(())
+    }
+
     #[test]
     fn signer_failure() -> TestResult {
         let tp = Builder::new(get_mock_service_key()).build_token_provider()?;
