@@ -77,12 +77,12 @@ use crate::constants::DEFAULT_SCOPE;
 use crate::credentials::dynamic::{AccessTokenCredentialsProvider, CredentialsProvider};
 use crate::credentials::{AccessToken, AccessTokenCredentials, CacheableResource, Credentials};
 use crate::errors::{self};
-use crate::headers_util::AuthHeadersBuilder;
+use crate::headers_util::{self, AuthHeadersBuilder};
 use crate::token::{CachedTokenProvider, Token, TokenProvider};
 use crate::token_cache::TokenCache;
 use crate::{BuildResult, Result};
 use async_trait::async_trait;
-use http::{Extensions, HeaderMap};
+use http::{Extensions, HeaderMap, HeaderValue};
 use jws::{CLOCK_SKEW_FUDGE, DEFAULT_TOKEN_TIMEOUT, JwsClaims, JwsHeader};
 use rustls::sign::Signer;
 use rustls_pki_types::{PrivateKeyDer, pem::PemObject};
@@ -617,9 +617,22 @@ where
     async fn headers(&self, extensions: Extensions) -> Result<CacheableResource<HeaderMap>> {
         let token = self.token_provider.token(extensions).await?;
 
-        AuthHeadersBuilder::new(&token)
+        let mut auth_headers = AuthHeadersBuilder::new(&token)
             .maybe_quota_project_id(self.quota_project_id.as_deref())
-            .build()
+            .build()?;
+
+        if let CacheableResource::New { data, .. } = &mut auth_headers {
+            data.insert(
+                headers_util::X_GOOG_API_CLIENT,
+                HeaderValue::from_str(&headers_util::metrics_header_value(
+                    headers_util::ACCESS_TOKEN_REQUEST_TYPE,
+                    "jwt",
+                ))
+                .map_err(errors::non_retryable)?,
+            );
+        }
+
+        Ok(auth_headers)
     }
 
     async fn universe_domain(&self) -> Option<String> {
@@ -721,9 +734,14 @@ mod tests {
         };
         let token = headers.get(AUTHORIZATION).unwrap();
 
-        assert_eq!(headers.len(), 1, "{headers:?}");
+        assert_eq!(headers.len(), 2, "{headers:?}");
         assert_eq!(token, HeaderValue::from_static("Bearer test-token"));
         assert!(token.is_sensitive());
+
+        let metrics = headers
+            .get(crate::headers_util::X_GOOG_API_CLIENT)
+            .expect("should have metrics header");
+        assert!(metrics.to_str().unwrap().contains("cred-type/jwt"));
 
         extensions.insert(entity_tag);
 
@@ -761,7 +779,7 @@ mod tests {
         let token = headers.get(AUTHORIZATION).unwrap();
         let quota_project_header = headers.get(QUOTA_PROJECT_KEY).unwrap();
 
-        assert_eq!(headers.len(), 2, "{headers:?}");
+        assert_eq!(headers.len(), 3, "{headers:?}");
         assert_eq!(token, HeaderValue::from_static("Bearer test-token"));
         assert!(token.is_sensitive());
         assert_eq!(
@@ -769,6 +787,11 @@ mod tests {
             HeaderValue::from_static(quota_project)
         );
         assert!(!quota_project_header.is_sensitive());
+
+        let metrics = headers
+            .get(crate::headers_util::X_GOOG_API_CLIENT)
+            .expect("should have metrics header");
+        assert!(metrics.to_str().unwrap().contains("cred-type/jwt"));
         Ok(())
     }
 
@@ -1097,6 +1120,36 @@ mod tests {
         assert_eq!(token_header["alg"], "RS256");
         assert_eq!(token_header["typ"], "JWT");
         assert_eq!(token_header["kid"], service_account_key["private_key_id"]);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[parallel]
+    async fn get_service_account_token_metrics_header_success() -> TestResult {
+        let mut service_account_key = get_mock_service_key();
+        service_account_key["private_key"] = Value::from(PKCS8_PK.clone());
+
+        let cred = Builder::new(service_account_key)
+            .with_access_specifier(crate::credentials::service_account::AccessSpecifier::from_scopes(["https://www.googleapis.com/auth/pubsub"]))
+            .build()?;
+
+        let headers = match cred.headers(Extensions::new()).await? {
+            CacheableResource::New { data, .. } => data,
+            CacheableResource::NotModified => panic!("expecting new headers"),
+        };
+        let token = headers
+            .get(http::header::AUTHORIZATION)
+            .expect("should have token");
+
+        let token_str = token.to_str()?;
+        assert!(token_str.starts_with("Bearer "));
+
+        // test metrics header
+        let metrics = headers
+            .get(crate::headers_util::X_GOOG_API_CLIENT)
+            .expect("should have metrics header");
+        assert!(metrics.to_str()?.contains("cred-type/jwt"));
 
         Ok(())
     }
