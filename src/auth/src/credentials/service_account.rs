@@ -578,6 +578,15 @@ impl ServiceAccountTokenGenerator {
         // the implementation.
         let current_time = OffsetDateTime::now_utc();
 
+        let has_scope = self.scopes.as_ref().is_some_and(|s| !s.is_empty());
+        let has_aud = self.audience.as_ref().is_some_and(|a| !a.is_empty());
+
+        if !has_scope && !has_aud {
+            return Err(errors::non_retryable_from_str(
+                "Neither audience nor scopes are set or they are empty.",
+            ));
+        }
+
         let claims = JwsClaims {
             iss: self.service_account_key.client_email.clone(),
             scope: self.scopes.clone(),
@@ -1076,6 +1085,26 @@ mod tests {
         assert!(claims["iat"].is_number());
         assert!(claims["exp"].is_number());
         assert_eq!(claims["sub"], service_account_key["client_email"]);
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[parallel]
+    async fn get_service_account_token_empty_scopes_and_audience_failure() -> TestResult {
+        let mut service_account_key = get_mock_service_key();
+        service_account_key["private_key"] = Value::from(PKCS8_PK.clone());
+
+        // Do not set scopes or audience (or set them to empty)
+        let cred = Builder::new(service_account_key)
+            .with_access_specifier(crate::credentials::service_account::AccessSpecifier::from_scopes(Vec::<String>::new()))
+            .build()?;
+            
+        let expected_error_message = "Neither audience nor scopes are set or they are empty.";
+        assert!(
+            cred.headers(Extensions::new())
+                .await
+                .is_err_and(|e| e.to_string().contains(expected_error_message))
+        );
         Ok(())
     }
 
